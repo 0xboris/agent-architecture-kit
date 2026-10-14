@@ -1,0 +1,84 @@
+// The module map and the import rules that tools/archcheck.py enforces.
+// docs/ARCHITECTURE.md explains the kinds. This is a gate file: change it
+// on purpose, in its own commit, with the owner's approval.
+{
+  "language": "swift",
+  "sourceRoots": ["."],
+  "testFiles": ["**/Tests/**"],
+  "ignore": ["**/Package.swift"],
+  "glossary": "GLOSSARY.md",
+
+  "modules": [
+    {"path": "App", "kind": "composition", "name": "App"},
+    {"path": "Packages/AppModules/Sources/AppComposition", "kind": "composition", "name": "AppComposition"},
+    {"path": "Packages/AppModules/Sources/Domain", "kind": "domain", "name": "Domain"},
+    {"path": "Packages/AppModules/Sources/Features/*/UseCases", "kind": "usecases", "name": "{1}UseCases", "slice": "{1}"},
+    {"path": "Packages/AppModules/Sources/Features/*/UI", "kind": "ui", "name": "{1}UI", "slice": "{1}"},
+    {"path": "Packages/AppModules/Sources/DesignSystem", "kind": "shared-ui", "name": "DesignSystem"},
+    {"path": "Packages/AppModules/Sources/Adapters/*", "kind": "adapter", "name": "{1}"},
+    {"path": "Packages/AppModules/Sources/Utilities", "kind": "utilities", "name": "Utilities"},
+    {"path": "Packages/AppModules/Sources/TestSupport", "kind": "test-support", "name": "TestSupport"}
+  ],
+
+  "kinds": {
+    "domain": {
+      "mayImport": ["utilities"],
+      "external": {"allow": ["Foundation"]},
+      "forbiddenCalls": ["@io"]
+    },
+    "usecases": {
+      "mayImport": ["domain", "utilities"],
+      "external": {"allow": ["Foundation"]},
+      "forbiddenCalls": ["@io"]
+    },
+    "ui": {
+      "mayImport": ["usecases@same-slice", "domain", "shared-ui", "utilities"],
+      "external": {"allow": ["SwiftUI", "Foundation", "Observation"]},
+      "forbiddenCalls": ["@io"]
+    },
+    "shared-ui": {
+      "mayImport": ["utilities"],
+      "external": {"allow": ["SwiftUI", "Foundation"]},
+      "forbiddenCalls": ["@io"],
+      "bannedTerms": "glossary"
+    },
+    "adapter": {
+      "mayImport": ["domain", "utilities"],
+      "external": {"allow": ["*"], "deny": ["SwiftUI", "UIKit", "AppKit"]}
+    },
+    "composition": {
+      "mayImport": ["*"],
+      "external": {"allow": ["SwiftUI", "Foundation", "BackgroundTasks"]},
+      "composition": {
+        "allowedFiles": ["*App.swift", "AppContainer.swift", "AppContainer+*.swift", "AppDependencies.swift",
+                         "LiveDependencies.swift", "RootView.swift", "LaunchConfiguration.swift", "BackgroundTasks.swift"],
+        "controlFlowAllowedIn": ["LaunchConfiguration.swift", "BackgroundTasks.swift"],
+        "maxLines": 400
+      }
+    },
+    "utilities": {
+      "mayImport": [],
+      "external": {"allow": ["Foundation"]},
+      "forbiddenCalls": ["@io"],
+      "bannedTerms": "glossary"
+    },
+    "test-support": {
+      "mayImport": ["domain", "utilities"],
+      "external": {"allow": ["Foundation", "os"]}
+    }
+  },
+
+  "forbiddenCallSets": {
+    "io": [
+      {"pattern": "\\bDate\\(\\)|\\bDate\\.now\\b", "fix": "Take the current time from the TimeSource port."},
+      {"pattern": "\\bUUID\\(\\)", "fix": "Take new ids from the IDGenerator port."},
+      {"pattern": "\\b(URLSession|FileManager|UserDefaults|NSPersistentContainer|NSManagedObjectContext|ModelContext|ProcessInfo|NotificationCenter)\\b|\\bBundle\\.main\\b|\\bData\\(contentsOf:",
+       "fix": "This is I/O. Declare a port in the domain and implement it in an adapter."},
+      {"pattern": "\\b(Locale|Calendar|TimeZone)\\.(current|autoupdatingCurrent)\\b", "fix": "Pass the locale, calendar, or time zone in as a value."},
+      {"pattern": "\\bTask\\.sleep\\b", "fix": "Wait through a port that tests can control."},
+      {"pattern": "\\.random\\(", "fix": "Take randomness from a port."},
+      {"pattern": "@(AppStorage|SceneStorage|Query|FetchRequest)\\b", "fix": "Read stored data through a use case and a port."},
+      {"pattern": "\\bprint\\(", "fix": "Log through the AppLogger interface from Utilities."}
+    ]
+  }
+}

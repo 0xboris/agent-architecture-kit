@@ -1,0 +1,80 @@
+// The module map and the import rules that tools/archcheck.py enforces.
+// docs/ARCHITECTURE.md explains the kinds. This is a gate file: change it
+// on purpose, in its own commit, with the owner's approval.
+{
+  "language": "typescript",
+  "sourceRoots": ["."],
+  "testFiles": ["**/*.test.ts"],
+  "ignore": ["*.config.ts"],
+  "glossary": "GLOSSARY.md",
+  "typescript": {"aliases": {}},
+
+  "modules": [
+    {"path": "src/app", "kind": "composition", "name": "app"},
+    {"path": "src/domain", "kind": "domain", "name": "domain"},
+    {"path": "src/features/*/usecases", "kind": "usecases", "name": "{1}/usecases", "slice": "{1}"},
+    {"path": "src/features/*/ui", "kind": "ui", "name": "{1}/ui", "slice": "{1}"},
+    {"path": "src/sharedui", "kind": "shared-ui", "name": "sharedui"},
+    {"path": "src/adapters/*", "kind": "adapter", "name": "adapters/{1}"},
+    {"path": "src/utilities", "kind": "utilities", "name": "utilities"},
+    {"path": "src/testsupport", "kind": "test-support", "name": "testsupport"}
+  ],
+
+  "kinds": {
+    "domain": {
+      "mayImport": ["utilities"],
+      "external": {"allow": []},
+      "forbiddenCalls": ["@io"]
+    },
+    "usecases": {
+      "mayImport": ["domain", "utilities"],
+      "external": {"allow": []},
+      "forbiddenCalls": ["@io"]
+    },
+    "ui": {
+      "mayImport": ["usecases@same-slice", "domain", "shared-ui", "utilities"],
+      "external": {"allow": ["node:http"]},
+      "forbiddenCalls": ["@io"]
+    },
+    "shared-ui": {
+      "mayImport": ["utilities"],
+      "external": {"allow": ["node:http"]},
+      "forbiddenCalls": ["@io"],
+      "bannedTerms": "glossary"
+    },
+    "adapter": {
+      "mayImport": ["domain", "utilities"],
+      "external": {"allow": ["*"]}
+    },
+    "composition": {
+      "mayImport": ["*"],
+      "external": {"allow": ["node:http", "node:path"]},
+      "composition": {
+        "allowedFiles": ["main.ts", "container.ts", "config.ts", "live.ts", "wire-*.ts"],
+        "controlFlowAllowedIn": ["config.ts"],
+        "maxLines": 400
+      }
+    },
+    "utilities": {
+      "mayImport": [],
+      "external": {"allow": []},
+      "forbiddenCalls": ["@io"],
+      "bannedTerms": "glossary"
+    },
+    "test-support": {
+      "mayImport": ["domain", "utilities"],
+      "external": {"allow": ["node:test", "node:assert", "node:assert/strict", "node:http", "node:net"]}
+    }
+  },
+
+  "forbiddenCallSets": {
+    "io": [
+      {"pattern": "\\bDate\\.now\\(|\\bnew Date\\(\\s*\\)", "fix": "Take the current time from the Clock port."},
+      {"pattern": "\\bMath\\.random\\(|\\bcrypto\\.randomUUID\\(", "fix": "Take ids and randomness from a port."},
+      {"pattern": "\\bprocess\\.(env|argv|exit|cwd)\\b", "fix": "Read configuration in the composition root and pass values in."},
+      {"pattern": "\\b(setTimeout|setInterval)\\(", "fix": "Wait through a port that tests can control."},
+      {"pattern": "\\bfetch\\(|\\blocalStorage\\b|\\bsessionStorage\\b", "fix": "This is I/O. Declare a port in the domain and implement it in an adapter."},
+      {"pattern": "\\bconsole\\.(log|info|warn|error|debug)\\(", "fix": "Log through the Logger interface from utilities."}
+    ]
+  }
+}

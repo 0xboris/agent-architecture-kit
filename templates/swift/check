@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# The one command that verifies the project. Agents run it after every step.
+# It prints only failures; full logs go to .check/ .
+set -uo pipefail
+cd "$(dirname "$0")"
+mkdir -p .check
+PACKAGE=Packages/AppModules
+status=0
+
+step() {
+  local name="$1"; shift
+  if "$@" > ".check/$name.log" 2>&1; then
+    echo "ok    $name"
+  else
+    echo "FAIL  $name   (full log: .check/$name.log)"
+    grep -E "error:|warning:|✘|FAIL|failed|violation|Fix:|^import|^external|^call|^term|^composition|^control-flow|^unmapped|^cycle|^  " ".check/$name.log" | head -40
+    status=1
+  fi
+}
+
+step architecture python3 tools/archcheck.py
+step module-map python3 tools/archcheck.py --module-map docs/architecture/modules.md
+step build swift build --package-path "$PACKAGE" --explicit-target-dependency-import-check=error
+step test swift test --package-path "$PACKAGE"
+if command -v swiftlint > /dev/null; then
+  step lint swiftlint lint --strict --quiet
+fi
+
+exit $status
