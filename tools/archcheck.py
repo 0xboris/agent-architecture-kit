@@ -409,7 +409,7 @@ def check(project):
         violations.append(Violation(
             "unmapped", f"unmapped:{rel}", rel, None,
             "This file belongs to no module in architecture.json.",
-            "Move it into an existing module, or create a slice with `python3 tools/new.py slice <Name>`."))
+            "Move it into an existing module, or create a new slice in the shape of the reference slice that AGENTS.md names."))
 
     for module in project.modules:
         kind_config = project.kinds[module.kind]
@@ -463,7 +463,7 @@ def check(project):
                     violations.append(Violation(
                         "composition", f"composition-file:{rel}", rel, None,
                         f"{module.label()} holds wiring only, in the files that architecture.json lists.",
-                        "Put feature code into a slice: `python3 tools/new.py slice <Name>`."))
+                        "Put feature code into a slice, in the shape of the reference slice that AGENTS.md names."))
                 if not matches_any(inner, composition.get("controlFlowAllowedIn", [])):
                     allowed_lines = [re.compile(p) for p in composition.get("controlFlowAllowedPatterns", [])]
                     keywords = "|".join(CONTROL_FLOW[project.language])

@@ -3,6 +3,7 @@ package usecases_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -11,8 +12,8 @@ import (
 	"__GO_MODULE__/internal/testsupport"
 )
 
-func TestCreatedNoteGetsIDAndTimeFromThePorts(t *testing.T) {
-	store := testsupport.NewFakeNoteStore()
+func TestCreatedNoteGetsIDAndTimeFromThePortsAndIsSaved(t *testing.T) {
+	store := &testsupport.StubNoteStore{}
 	now := time.Date(2025, 3, 1, 9, 0, 0, 0, time.UTC)
 	createNote := usecases.NewCreateNote(store, testsupport.NewFakeClock(now), &testsupport.SequentialIDs{})
 
@@ -21,13 +22,13 @@ func TestCreatedNoteGetsIDAndTimeFromThePorts(t *testing.T) {
 	if err != nil || note.ID != "id-001" || !note.CreatedAt.Equal(now) {
 		t.Fatalf("Run() = %+v, %v", note, err)
 	}
-	if notes, _ := store.AllNotes(context.Background()); len(notes) != 1 || notes[0] != note {
-		t.Fatalf("stored notes = %v", notes)
+	if saved := store.Saved(); !slices.Equal(saved, []domain.Note{note}) {
+		t.Fatalf("saved %v; want [%v]", saved, note)
 	}
 }
 
-func TestInvalidTitleIsNotStored(t *testing.T) {
-	store := testsupport.NewFakeNoteStore()
+func TestInvalidTitleIsNotSaved(t *testing.T) {
+	store := &testsupport.StubNoteStore{}
 	createNote := usecases.NewCreateNote(store, testsupport.NewFakeClock(time.Unix(0, 0)), &testsupport.SequentialIDs{})
 
 	_, err := createNote.Run(context.Background(), "")
@@ -35,8 +36,18 @@ func TestInvalidTitleIsNotStored(t *testing.T) {
 	if !errors.Is(err, domain.ErrTitleEmpty) {
 		t.Fatalf("err = %v; want ErrTitleEmpty", err)
 	}
-	if notes, _ := store.AllNotes(context.Background()); len(notes) != 0 {
-		t.Fatalf("stored notes = %v; want none", notes)
+	if saved := store.Saved(); len(saved) != 0 {
+		t.Fatalf("saved %v; want nothing", saved)
+	}
+}
+
+func TestFailedSaveReachesTheCaller(t *testing.T) {
+	offline := errors.New("offline")
+	store := &testsupport.StubNoteStore{Err: offline}
+	createNote := usecases.NewCreateNote(store, testsupport.NewFakeClock(time.Unix(0, 0)), &testsupport.SequentialIDs{})
+
+	if _, err := createNote.Run(context.Background(), "Groceries"); !errors.Is(err, offline) {
+		t.Fatalf("err = %v; want offline", err)
 	}
 }
 
@@ -44,10 +55,11 @@ func TestNotesAreListedNewestFirst(t *testing.T) {
 	start := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	older := testsupport.SampleNote(1, start)
 	newer := testsupport.SampleNote(2, start.Add(time.Hour))
+	store := &testsupport.StubNoteStore{Notes: []domain.Note{older, newer}}
 
-	notes, err := usecases.NewListNotes(testsupport.NewFakeNoteStore(older, newer)).Run(context.Background())
+	notes, err := usecases.NewListNotes(store).Run(context.Background())
 
-	if err != nil || len(notes) != 2 || notes[0] != newer {
+	if err != nil || !slices.Equal(notes, []domain.Note{newer, older}) {
 		t.Fatalf("Run() = %v, %v", notes, err)
 	}
 }

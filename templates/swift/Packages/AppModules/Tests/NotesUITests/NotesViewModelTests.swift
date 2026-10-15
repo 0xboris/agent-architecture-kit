@@ -6,41 +6,40 @@ import TestSupport
 
 @MainActor
 struct NotesViewModelTests {
-    let store = FakeNoteStore()
-
-    func makeViewModel() -> NotesViewModel {
+    func makeViewModel(store: StubNoteStore) -> NotesViewModel {
         NotesViewModel(
             createNote: CreateNote(store: store, time: FakeTimeSource(), ids: SequentialIDGenerator()),
             listNotes: ListNotes(store: store)
         )
     }
 
-    @Test func addingANoteShowsItAndClearsTheDraft() async throws {
-        let viewModel = makeViewModel()
+    @Test func addingANoteSavesItReloadsAndClearsTheDraft() async throws {
+        let listed = [try Samples.note(1)]
+        let store = StubNoteStore(notes: listed)
+        let viewModel = makeViewModel(store: store)
         viewModel.draftTitle = "Groceries"
 
         await viewModel.add()
 
-        let stored = try await store.allNotes()
-        #expect(viewModel.state == .loaded(stored))
-        #expect(stored.map(\.title.value) == ["Groceries"])
+        #expect(await store.saved.map(\.title.value) == ["Groceries"])
+        #expect(viewModel.state == .loaded(listed))
         #expect(viewModel.draftTitle.isEmpty)
     }
 
-    @Test func emptyTitleShowsAMessageAndStoresNothing() async throws {
-        let viewModel = makeViewModel()
+    @Test func emptyTitleShowsAMessageAndSavesNothing() async throws {
+        let store = StubNoteStore()
+        let viewModel = makeViewModel(store: store)
         viewModel.draftTitle = "  "
 
         await viewModel.add()
 
         #expect(viewModel.draftError == "Enter a title.")
-        #expect(try await store.allNotes().isEmpty)
+        #expect(await store.saved.isEmpty)
     }
 
     @Test func failedLoadShowsTheFailedState() async {
         struct Offline: Error {}
-        await store.failNextCall(with: Offline())
-        let viewModel = makeViewModel()
+        let viewModel = makeViewModel(store: StubNoteStore(failure: Offline()))
 
         await viewModel.load()
 

@@ -12,7 +12,7 @@ import (
 )
 
 // Dependencies are the adapters that the service runs with. LiveDependencies
-// creates the real ones; the composition test passes fakes.
+// creates the real ones; the composition test passes stubs.
 type Dependencies struct {
 	NoteStore domain.NoteStore
 	Clock     domain.Clock
@@ -35,7 +35,6 @@ func New(deps Dependencies) *App {
 		noteStore: middleware.NewLoggingNoteStore(deps.NoteStore, deps.Logger),
 	}
 	app.wireNotes()
-	// scaffold:wire
 	return app
 }
 

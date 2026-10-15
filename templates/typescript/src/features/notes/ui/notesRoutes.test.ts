@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import type { NoteStore } from '../../../domain/ports.ts';
 import { createRouter } from '../../../sharedui/http.ts';
-import { FakeClock, FakeNoteStore, RecordingLogger, SequentialIds } from '../../../testsupport/fakes.ts';
+import { FakeClock, RecordingLogger, SequentialIds, sampleNote } from '../../../testsupport/fakes.ts';
 import { startTestServer } from '../../../testsupport/http.ts';
 import { CreateNote } from '../usecases/createNote.ts';
 import { ListNotes } from '../usecases/listNotes.ts';
 import { notesRoutes } from './notesRoutes.ts';
 
-async function withServer(store: FakeNoteStore, run: (url: string) => Promise<void>): Promise<void> {
+async function withServer(store: NoteStore, run: (url: string) => Promise<void>): Promise<void> {
   const routes = notesRoutes({
     createNote: new CreateNote({ store, clock: new FakeClock(), ids: new SequentialIds() }),
     listNotes: new ListNotes({ store }),
@@ -21,8 +22,19 @@ async function withServer(store: FakeNoteStore, run: (url: string) => Promise<vo
   }
 }
 
+const emptyStore: NoteStore = { allNotes: async () => [], save: async () => {} };
+
+test('listing notes returns them', async () => {
+  const store: NoteStore = { allNotes: async () => [sampleNote(1)], save: async () => {} };
+  await withServer(store, async (url) => {
+    const response = await fetch(`${url}/notes`);
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json()).map((note: { title: string }) => note.title), ['Note 1']);
+  });
+});
+
 test('posting a note returns created', async () => {
-  await withServer(new FakeNoteStore(), async (url) => {
+  await withServer(emptyStore, async (url) => {
     const response = await fetch(`${url}/notes`, { method: 'POST', body: JSON.stringify({ title: 'Groceries' }) });
     assert.equal(response.status, 201);
     assert.equal((await response.json()).title, 'Groceries');
@@ -30,7 +42,7 @@ test('posting a note returns created', async () => {
 });
 
 test('posting an empty title returns unprocessable', async () => {
-  await withServer(new FakeNoteStore(), async (url) => {
+  await withServer(emptyStore, async (url) => {
     const response = await fetch(`${url}/notes`, { method: 'POST', body: JSON.stringify({ title: ' ' }) });
     assert.equal(response.status, 422);
     assert.equal((await response.json()).code, 'title_empty');
@@ -38,8 +50,12 @@ test('posting an empty title returns unprocessable', async () => {
 });
 
 test('a failed load returns a server error', async () => {
-  const store = new FakeNoteStore();
-  store.failNextCall(new Error('offline'));
+  const store: NoteStore = {
+    allNotes: async () => {
+      throw new Error('offline');
+    },
+    save: async () => {},
+  };
   await withServer(store, async (url) => {
     const response = await fetch(`${url}/notes`);
     assert.equal(response.status, 500);
