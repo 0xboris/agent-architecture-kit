@@ -24,7 +24,7 @@ Each project receives:
 - **The docs.** `docs/ARCHITECTURE.md`, its language guide, `docs/architecture/stack.md` for the project's libraries, and the generated module map.
 - **The tools.** `tools/archcheck.py`, the Stop hook script, and `./check`, the one command that verifies everything.
 - **The configuration.** `architecture.json` maps directories to module kinds and sets the rules for each kind, and `architecture-baseline.json` holds the violations you have accepted.
-- **Agent instructions.** `AGENTS.md`, which names the reference slice, plus a `CLAUDE.md` that imports it.
+- **Agent instructions.** `AGENTS.md`, which names the reference slice, a `CLAUDE.md` that imports it, and a `README.md` to fill in with what the project does.
 - **Claude Code integration in `.claude/`.** The Stop hook, a path-scoped rule that points agents to the docs, the `new-slice` and `new-port` checklists, and the `architecture-reviewer` subagent.
 - **Code owners.** `.github/CODEOWNERS` covers the gate files and the composition root.
 - **CI.** `.github/workflows/check.yml` runs `./check`.
@@ -36,7 +36,7 @@ Each project receives:
 - Git, for the Stop hook.
 - Swift projects: a Swift 6 toolchain and Xcode.
 - Go projects: Go 1.24 or later.
-- TypeScript projects: Node 24 or later. The template uses TypeScript 7 for type checking, and Node runs the `.ts` files directly.
+- TypeScript projects: Node 24 or later. The template uses TypeScript 7 for type checking, and Node runs the `.ts` files directly. It has no linter. typescript-eslint supports only TypeScript below 6.1 as of 2026-10-15, so a project that adds it pins TypeScript to 6.0.
 
 ## Start a new project
 
@@ -88,6 +88,8 @@ python3 path/to/kit/tools/new.py adopt go ~/Dev/legacy-service --owner @your-git
 The language guides describe the template layout. In a project with a different layout, either move toward the template layout over time, or keep the existing layout mapped in `architecture.json` and name as the reference the slice that follows the architecture best.
 
 ## Day to day
+
+The Stop hook runs `./check` with the PATH of the Claude Code session, so the session needs the project's toolchain, such as Node 24 and the package manager, on its PATH.
 
 Agents read `AGENTS.md` at the start of each task and the architecture docs when they touch code. They copy the structure of the reference slice, using the `new-slice` and `new-port` checklists, run `./check` after each step, and cannot finish a task while the check fails. Before a pull request, they ask the `architecture-reviewer` subagent for the judgment calls the check cannot make.
 

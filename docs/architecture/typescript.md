@@ -63,7 +63,7 @@ Schema files and migrations belong to the adapter that owns the storage. Never e
 - `container.ts` defines `Dependencies` and `createApp`. `createApp` applies the mandatory middleware and collects every slice.
 - `wire-<slice>.ts` builds the slice's use cases and UI, and decides which optional middleware the slice gets.
 - `live.ts` creates the real adapters, `config.ts` reads the environment, and `main.ts` starts the process.
-- When an adapter holds a resource that must be closed, such as a database pool, `live.ts` returns it next to the dependencies, and `main.ts` closes it on shutdown.
+- When an adapter holds a resource that must be closed, such as a database pool, `live.ts` returns it next to the dependencies, for example as `{ dependencies, migrate, close }`, and `main.ts` closes it on shutdown.
 - Migrations run before the process serves. `main.ts` applies them at start, or a separate entry file such as `migrate.ts` does.
 - Control flow is allowed only in `config.ts`. Elsewhere, handle a failed start with `.catch()` on the promise, which the check allows, rather than with `try` and `catch`.
 
