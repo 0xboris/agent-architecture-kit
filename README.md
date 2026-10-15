@@ -52,6 +52,8 @@ python3 path/to/kit/tools/new.py init go ~/Dev/budget-service --name BudgetServi
 python3 path/to/kit/tools/new.py init typescript ~/Dev/budget-api --name BudgetApi --owner @your-github-user
 ```
 
+The destination must be empty or hold only `.git`, so you can run `init` in a freshly cloned empty repository.
+
 Then, in the new folder:
 
 1. Run `./check`. It passes on a fresh project.
@@ -121,7 +123,7 @@ Lines that start with `//` are comments.
 
 - **`language`.** `swift`, `go`, or `typescript`.
 - **`sourceRoots`.** Directories to scan. The templates scan the whole repository (`.`), so a source file outside every module fails as unmapped.
-- **`testFiles` and `ignore`.** Glob patterns. Test files are exempt from the import rules.
+- **`testFiles` and `ignore`.** Glob patterns, matched against paths from the repository root. `*` stays within one directory and `**` crosses directories, so `*.config.ts` matches only files in the root. Test files are exempt from the import rules.
 - **`glossary`.** The glossary file. Its level-2 headings are the terms banned from modules with `"bannedTerms": "glossary"`.
 - **`modules`.** Maps directories to kinds.
   - `path` may use `*` for one directory level, and `{1}` in `name` or `slice` inserts what the first `*` matched.
@@ -132,7 +134,7 @@ Lines that start with `//` are comments.
   - `forbiddenCalls`: regular expressions, or `@set` references, with the fix to show.
   - `bannedTerms`: `"glossary"` or a list of words.
   - `composition`: `allowedFiles`, `controlFlowAllowedIn`, `controlFlowAllowedPatterns`, and `maxLines`.
-- **`externalSets` and `forbiddenCallSets`.** Named lists that kinds refer to as `@name`.
+- **`externalSets` and `forbiddenCallSets`.** Named lists that kinds refer to as `@name`. An entry with a slash, such as `@hono/node-server` or `@hono/*`, is a scoped npm package, not a set. A reference to a set that does not exist fails the check.
 
 To allow a library in the domain, such as a decimal type, add it to the domain's `external.allow`. That is a deliberate change to a gate file, so it goes through your review.
 
@@ -158,6 +160,12 @@ Retested on Linux on 2026-10-15, after the generators were removed and the fakes
 
 - **New projects.** `init go` and `init typescript` create projects whose `./check` passes.
 - **Adoption.** `adopt go` on a small Go project adds `docs/architecture/stack.md` and keeps existing files.
+
+Retested on Linux on 2026-10-15 with Node 24.22, after fixes from a test setup by a fresh agent:
+
+- **`init` in an empty clone.** `init typescript` and `init go` work in a directory that holds only `.git`, and `./check` passes, including the install step from an empty `node_modules`.
+- **Architecture check.** A `.js` file in the domain is checked like a `.ts` file. `@hono/*` in `external.allow` allows `@hono/node-server`. A reference to an unknown set fails with a configuration error.
+- **Stop hook.** In a repository without commits, it runs `./check` when files exist.
 
 Not tested:
 

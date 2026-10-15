@@ -31,17 +31,24 @@ The domain may import the standard library except the I/O packages that `archite
 
 ## Slices
 
-- **Use cases** are structs with unexported port fields, a `NewX` constructor, and a `Run(ctx, ...)` method.
+- **Use cases** are structs with unexported port fields, a `NewX` constructor, and a `Run(ctx, ...)` method. Settings are plain values, such as a retention period, that `config.go` reads and the wiring file passes to the constructor.
 - **The UI package** takes the slice's use cases and a logger in its constructor. Request and response types stay in the UI package and map to and from domain types.
 - The UI package logs the errors it handles and maps domain errors to output with `errors.Is`.
 
 UI code may not make outgoing requests or touch the file system. Put that behind a port.
 
+## Other entry points
+
+- A background job or a scheduled task is an entry point of its slice, like a handler. Its code lives in the slice's UI package and calls the slice's use cases.
+- The queue or scheduler that runs jobs is an adapter. The composition root registers each slice's jobs with it and sets their schedules from configuration.
+- A use case that puts work on a queue does so through a port, which the queue adapter implements.
+- When the service runs as more than one process, such as an API and a worker, each process gets its own directory under `cmd/`, such as `cmd/server` and `cmd/worker`.
+
 ## Adapters
 
 An adapter package imports the domain and whatever libraries it needs. It keeps its stored or wire records unexported and maps them to domain types. Guard mutable state with a `sync.Mutex`. The `filestore` adapter shows atomic writes: it writes a temporary file and then renames it.
 
-For SQL databases, keep numbered migrations in the adapter, and never edit a migration that has shipped.
+For SQL databases, keep numbered migrations in the adapter, and never edit a migration that has shipped. A helper that creates a real database for tests lives in the adapter package, next to the adapter's tests, because test support may not import adapters.
 
 ## Composition root
 

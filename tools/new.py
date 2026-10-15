@@ -45,6 +45,15 @@ COMPOSITION_PATHS = {
 }
 
 
+# Compiler, linter, and test runner settings. An agent could weaken a check by
+# changing them, so they are gate files too.
+TOOL_CONFIG_PATHS = {
+    "swift": ["/.swiftlint.yml"],
+    "go": ["/go.mod", "/.golangci.yml", "/.golangci.yaml"],
+    "typescript": ["/package.json", "/tsconfig*.json", "/eslint.config.*", "/vitest.config.*"],
+}
+
+
 def kit_root():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     if not os.path.isdir(os.path.join(root, "templates")):
@@ -88,6 +97,7 @@ def placeholder_values(language, args):
         "__LANGUAGE__": language,
         "__OWNER__": args.owner,
         "__COMPOSITION_LINES__": "\n".join(f"{path:<30}{args.owner}" for path in COMPOSITION_PATHS[language]),
+        "__TOOL_CONFIG_LINES__": "\n".join(f"{path:<30}{args.owner}" for path in TOOL_CONFIG_PATHS[language]),
         "__APP_NAME__": args.name,
         "__PROJECT_NAME__": separated(args.name, "-"),
         "__GO_MODULE__": args.module or f"example.com/{args.name.lower()}",
@@ -97,7 +107,8 @@ def placeholder_values(language, args):
 def init(args):
     kit = kit_root()
     dest = os.path.abspath(args.dest)
-    if os.path.exists(dest) and os.listdir(dest):
+    # An empty clone holds only .git, so .git does not count as content.
+    if os.path.exists(dest) and [entry for entry in os.listdir(dest) if entry != ".git"]:
         fail(f"{dest} is not empty. Use `adopt` for an existing project.")
     if not PASCAL.match(args.name):
         fail("--name must be a type-style name such as ExpenseTracker")

@@ -22,7 +22,12 @@ import sys
 from collections import defaultdict
 
 SKIP_DIRS = {".git", ".build", ".swiftpm", "build", "DerivedData", "node_modules", "dist", "vendor", ".idea", ".vscode"}
-DEFAULT_EXTENSIONS = {"swift": [".swift"], "go": [".go"], "typescript": [".ts", ".tsx", ".mts", ".cts"]}
+DEFAULT_EXTENSIONS = {
+    "swift": [".swift"],
+    "go": [".go"],
+    # JavaScript files are scanned too, so code cannot escape the rules by being plain JavaScript.
+    "typescript": [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"],
+}
 CONTROL_FLOW = {
     "swift": ["if", "guard", "switch", "for", "while", "repeat", "catch"],
     "go": ["if", "for", "switch", "select", "goto"],
@@ -377,12 +382,26 @@ def import_allowed(project, source, target):
     return False
 
 
+def is_set_reference(entry):
+    """'@name' refers to a named set. '@scope/package' is a scoped npm package, not a set."""
+    return isinstance(entry, str) and entry.startswith("@") and "/" not in entry
+
+
+def lookup_set(project, section, entry):
+    sets = project.config.get(section, {})
+    if entry[1:] not in sets:
+        raise ConfigError(
+            f"architecture.json: '{entry}' refers to no set in '{section}'. "
+            f"Define it there, or write a scoped package with its scope and name, such as '@scope/package'.")
+    return sets[entry[1:]]
+
+
 def expand_sets(project, patterns):
     """Replaces '@name' entries with the patterns listed under externalSets.name."""
     expanded = []
     for pattern in patterns:
-        if pattern.startswith("@"):
-            expanded.extend(project.config.get("externalSets", {}).get(pattern[1:], []))
+        if is_set_reference(pattern):
+            expanded.extend(lookup_set(project, "externalSets", pattern))
         else:
             expanded.append(pattern)
     return expanded
@@ -403,7 +422,6 @@ def check(project):
     violations = []
     terms = project.glossary_terms()
     graph = defaultdict(set)
-    call_sets = project.config.get("forbiddenCallSets", {})
 
     for rel in project.unmapped:
         violations.append(Violation(
@@ -415,7 +433,7 @@ def check(project):
         kind_config = project.kinds[module.kind]
         calls = []
         for entry in kind_config.get("forbiddenCalls", []):
-            calls.extend(call_sets.get(entry[1:], []) if isinstance(entry, str) and entry.startswith("@") else [entry])
+            calls.extend(lookup_set(project, "forbiddenCallSets", entry) if is_set_reference(entry) else [entry])
         banned_terms = terms if kind_config.get("bannedTerms") == "glossary" else kind_config.get("bannedTerms", [])
         term_regexes = [(t, re.compile(re.escape(t) + "|\\b" + re.escape(t[:1].lower() + t[1:]))) for t in banned_terms]
         composition = kind_config.get("composition")
@@ -562,7 +580,11 @@ def main():
             f.write(module_map(project) + "\n")
         return 0
 
-    violations = check(project)
+    try:
+        violations = check(project)
+    except ConfigError as error:
+        print(f"Architecture check: {error}", file=sys.stderr)
+        return 2
     counts = defaultdict(int)
     for v in violations:
         counts[v.key] += 1

@@ -37,7 +37,7 @@ The domain imports only Foundation, for value types such as `Date` and `UUID`. I
 
 ## Slices
 
-- **Use cases** are `Sendable` structs that take ports in their initializer and expose `callAsFunction`. They throw domain errors unchanged, so the UI can tell the cases apart.
+- **Use cases** are `Sendable` structs that take ports and settings in their initializer and expose `callAsFunction`. Settings are plain values, such as a retention period, that the composition root passes in. They throw domain errors unchanged, so the UI can tell the cases apart.
 - **The UI target** takes the slice's use cases in its initializers and holds no storage access of its own. Read stored data through a use case.
 
 ## Adapters

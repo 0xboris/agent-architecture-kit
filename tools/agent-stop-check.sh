@@ -8,8 +8,17 @@ already_continued=$(printf '%s' "$input" | python3 -c 'import json, sys; print(j
 [ "$already_continued" = "True" ] && exit 0
 
 cd "${CLAUDE_PROJECT_DIR:-.}" || exit 0
-base=$(git merge-base HEAD main 2>/dev/null || git rev-parse HEAD 2>/dev/null) || exit 0
-if git diff --quiet "$base" 2>/dev/null && [ -z "$(git status --porcelain 2>/dev/null)" ]; then
+git rev-parse --git-dir > /dev/null 2>&1 || exit 0
+
+# Changes count against the default branch, so committed work on a feature
+# branch is checked too. A repository without commits has only uncommitted changes.
+if git rev-parse --verify --quiet HEAD > /dev/null; then
+  default=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || echo main)
+  base=$(git merge-base HEAD "$default" 2>/dev/null || git rev-parse HEAD)
+  if git diff --quiet "$base" && [ -z "$(git status --porcelain)" ]; then
+    exit 0
+  fi
+elif [ -z "$(git status --porcelain)" ]; then
   exit 0
 fi
 

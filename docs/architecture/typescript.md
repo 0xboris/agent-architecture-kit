@@ -39,20 +39,29 @@ The domain imports no packages and no Node built-ins. It must not call `Date.now
 
 ## Slices
 
-- **Use cases** are classes with private `#` fields, a constructor that takes an object of ports, and a `run` method.
+- **Use cases** are classes with private `#` fields, a constructor that takes an object of ports and settings, and a `run` method. Settings are plain values, such as a retention period, that `config.ts` reads and the wiring file passes in.
 - **The UI module** takes the slice's use cases and a logger. Input arrives as `unknown` and goes through a parse function before use. Response and request types stay in the UI module and map to and from domain types.
 - The UI module logs the errors it handles and maps result errors to output, such as status codes.
+
+## Other entry points
+
+- A background job or a scheduled task is an entry point of its slice, like a route. Its handler lives in the slice's UI module and calls the slice's use cases.
+- The queue or scheduler that runs jobs is an adapter. The composition root registers each slice's jobs with it and sets their schedules from configuration.
+- A use case that puts work on a queue does so through a port, which the queue adapter implements.
+- When the service runs as more than one process, such as an API and a worker, each process gets its own entry file in `src/app`, such as `main.ts` and `worker.ts`. Add the new file to `allowedFiles` in `architecture.json`.
 
 ## Adapters
 
 An adapter imports the domain and any packages it needs. It parses what it reads, since stored data is outside data, and maps it to domain types. `FileNoteStore` shows how to serialize access with a promise queue and how to write atomically with a temporary file and a rename.
+
+Schema files and migrations belong to the adapter that owns the storage. Never edit a migration that has shipped. A helper that creates a real database for tests lives in the adapter module, next to the adapter's tests, because test support may not import adapters.
 
 ## Composition root
 
 - `container.ts` defines `Dependencies` and `createApp`. `createApp` applies the mandatory middleware and collects every slice.
 - `wire-<slice>.ts` builds the slice's use cases and UI, and decides which optional middleware the slice gets.
 - `live.ts` creates the real adapters, `config.ts` reads the environment, and `main.ts` starts the process.
-- Control flow is allowed only in `config.ts`.
+- Control flow is allowed only in `config.ts`. Elsewhere, handle a failed start with `.catch()` on the promise, which the check allows, rather than with `try` and `catch`.
 
 ## Tests
 

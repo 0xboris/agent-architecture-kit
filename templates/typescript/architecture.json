@@ -5,7 +5,7 @@
   "language": "typescript",
   "sourceRoots": ["."],
   "testFiles": ["**/*.test.ts"],
-  "ignore": ["*.config.ts"],
+  "ignore": ["*.config.ts", "*.config.js", "*.config.mjs"],
   "glossary": "GLOSSARY.md",
   "typescript": {"aliases": {}},
 

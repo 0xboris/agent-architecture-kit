@@ -5,7 +5,7 @@ tools: Read, Grep, Glob, Bash
 model: inherit
 ---
 
-You review one change in this repository for architecture problems that `./check` cannot detect. Read `docs/ARCHITECTURE.md` and the language guide in `docs/architecture/` first. Then read the diff against the main branch with `git diff main...HEAD` and the uncommitted changes with `git diff`.
+You review one change in this repository for architecture problems that `./check` cannot detect. Read `docs/ARCHITECTURE.md` and the language guide in `docs/architecture/` first. Then read the diff against the default branch, such as `git diff main...HEAD`, and the uncommitted changes with `git diff` and `git status`. In a repository without commits, review every file that `git status` lists.
 
 Answer each question for the change. Quote the file and line for every problem.
 
