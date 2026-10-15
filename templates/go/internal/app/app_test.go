@@ -1,7 +1,6 @@
 package app_test
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -14,9 +13,10 @@ import (
 )
 
 // Composition tests check the wiring in package app: which middleware each
-// slice receives. Unit tests of a slice use fakes and never see the wiring.
+// slice receives. Unit tests of a slice build their use cases directly and
+// never see the wiring.
 func TestNotesSliceStoresThroughTheLoggingMiddleware(t *testing.T) {
-	store := testsupport.NewFakeNoteStore()
+	store := &testsupport.StubNoteStore{}
 	logger := &testsupport.RecordingLogger{}
 	service := app.New(app.Dependencies{
 		NoteStore: store,
@@ -32,8 +32,8 @@ func TestNotesSliceStoresThroughTheLoggingMiddleware(t *testing.T) {
 	if response.Code != http.StatusCreated {
 		t.Fatalf("got %d %s", response.Code, response.Body)
 	}
-	if notes, _ := store.AllNotes(context.Background()); len(notes) != 1 {
-		t.Fatalf("stored notes = %v; want one", notes)
+	if saved := store.Saved(); len(saved) != 1 {
+		t.Fatalf("saved %v; want one note", saved)
 	}
 	if got := logger.Messages(); !slices.Equal(got, []string{"note saved"}) {
 		t.Fatalf("logged %v; want the middleware's entry", got)

@@ -10,6 +10,9 @@
 /docs/ARCHITECTURE.md         __OWNER__
 /docs/architecture/           __OWNER__
 
+# Compiler, linter, and test runner settings.
+__TOOL_CONFIG_LINES__
+
 # The module map is generated, so it needs no owner.
 /docs/architecture/modules.md
 

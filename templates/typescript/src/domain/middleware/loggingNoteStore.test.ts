@@ -1,22 +1,27 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
-import { FakeNoteStore, RecordingLogger, sampleNote } from '../../testsupport/fakes.ts';
+import { mock, test } from 'node:test';
+import { RecordingLogger, sampleNote } from '../../testsupport/fakes.ts';
+import type { NoteStore } from '../ports.ts';
 import { LoggingNoteStore } from './loggingNoteStore.ts';
 
-test('saving through the middleware logs and stores', async () => {
-  const store = new FakeNoteStore();
+test('saving through the middleware saves and logs', async () => {
+  const save = mock.fn<NoteStore['save']>(async () => {});
   const logger = new RecordingLogger();
   const note = sampleNote(1);
 
-  await new LoggingNoteStore(store, logger).save(note);
+  await new LoggingNoteStore({ allNotes: async () => [], save }, logger).save(note);
 
-  assert.deepEqual(await store.allNotes(), [note]);
+  assert.deepEqual(save.mock.calls.map((call) => call.arguments), [[note]]);
   assert.deepEqual(logger.messages, ['note saved']);
 });
 
 test('a failed save is not logged', async () => {
-  const store = new FakeNoteStore();
-  store.failNextCall(new Error('offline'));
+  const store: NoteStore = {
+    allNotes: async () => [],
+    save: async () => {
+      throw new Error('offline');
+    },
+  };
   const logger = new RecordingLogger();
 
   await assert.rejects(new LoggingNoteStore(store, logger).save(sampleNote(1)), /offline/);

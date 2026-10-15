@@ -1,66 +1,15 @@
-// Package testsupport holds the shared fakes and contract suites. Only test
+// Package testsupport holds stubs, small fakes, and sample data. Only test
 // code imports it.
 package testsupport
 
 import (
-	"context"
 	"fmt"
-	"maps"
 	"slices"
 	"sync"
 	"time"
 
 	"__GO_MODULE__/internal/domain"
 )
-
-// FakeNoteStore is the shared fake for domain.NoteStore. NoteStoreContract
-// checks that it behaves like the real store. Like the real store, it
-// returns notes in no particular order.
-type FakeNoteStore struct {
-	mu        sync.Mutex
-	notes     map[domain.NoteID]domain.Note
-	nextError error
-}
-
-func NewFakeNoteStore(notes ...domain.Note) *FakeNoteStore {
-	store := &FakeNoteStore{notes: map[domain.NoteID]domain.Note{}}
-	for _, note := range notes {
-		store.notes[note.ID] = note
-	}
-	return store
-}
-
-// FailNextCall makes the next call return err.
-func (s *FakeNoteStore) FailNextCall(err error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.nextError = err
-}
-
-func (s *FakeNoteStore) AllNotes(ctx context.Context) ([]domain.Note, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if err := s.takeError(); err != nil {
-		return nil, err
-	}
-	return slices.Collect(maps.Values(s.notes)), nil
-}
-
-func (s *FakeNoteStore) Save(ctx context.Context, note domain.Note) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if err := s.takeError(); err != nil {
-		return err
-	}
-	s.notes[note.ID] = note
-	return nil
-}
-
-func (s *FakeNoteStore) takeError() error {
-	err := s.nextError
-	s.nextError = nil
-	return err
-}
 
 // FakeClock starts at a fixed time and moves only when a test calls Advance.
 type FakeClock struct {

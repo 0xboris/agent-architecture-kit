@@ -1,39 +1,6 @@
 import { parseNoteTitle, type Note } from '../domain/note.ts';
-import type { Clock, IdGenerator, NoteStore } from '../domain/ports.ts';
+import type { Clock, IdGenerator } from '../domain/ports.ts';
 import type { Logger } from '../utilities/logger.ts';
-
-/**
- * The shared fake for NoteStore. noteStoreContract checks that it behaves like
- * the real store. Use failNextCall to test error handling.
- */
-export class FakeNoteStore implements NoteStore {
-  readonly #notes = new Map<string, Note>();
-  #nextError: Error | undefined;
-
-  constructor(notes: readonly Note[] = []) {
-    for (const note of notes) this.#notes.set(note.id, note);
-  }
-
-  failNextCall(error: Error): void {
-    this.#nextError = error;
-  }
-
-  async allNotes(): Promise<Note[]> {
-    this.#throwPendingError();
-    return [...this.#notes.values()];
-  }
-
-  async save(note: Note): Promise<void> {
-    this.#throwPendingError();
-    this.#notes.set(note.id, note);
-  }
-
-  #throwPendingError(): void {
-    const error = this.#nextError;
-    this.#nextError = undefined;
-    if (error !== undefined) throw error;
-  }
-}
 
 /** A clock that starts at a fixed time and moves only when a test calls advance. */
 export class FakeClock implements Clock {
