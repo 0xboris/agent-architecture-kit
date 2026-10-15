@@ -50,7 +50,7 @@ COMPOSITION_PATHS = {
 TOOL_CONFIG_PATHS = {
     "swift": ["/.swiftlint.yml"],
     "go": ["/go.mod", "/.golangci.yml", "/.golangci.yaml"],
-    "typescript": ["/package.json", "/tsconfig*.json", "/eslint.config.*", "/vitest.config.*"],
+    "typescript": ["/package.json", "/tsconfig*.json", "/eslint.config.*", "/vitest.config.*", "/pnpm-workspace.yaml", "/.npmrc"],
 }
 
 
@@ -127,8 +127,9 @@ def init(args):
             "Add Packages/AppModules as a local package, and link the AppComposition product to the app target.",
         ],
         "go": ["Run `go mod tidy` if you add dependencies."],
-        "typescript": ["Run `npm install`."],
+        "typescript": [],
     }[args.language]
+    steps.append("Describe what the project does in README.md.")
     steps.append("Run ./check.")
     if args.owner == "@OWNER":
         steps.append("Replace @OWNER in .github/CODEOWNERS with your GitHub user or team.")

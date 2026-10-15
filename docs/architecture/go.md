@@ -2,6 +2,8 @@
 
 This guide shows how each part of `docs/ARCHITECTURE.md` looks in Go. It holds the rules that come from the language. `docs/architecture/stack.md` names the libraries this project uses, such as the HTTP router and the logger, and how the reference slice uses them.
 
+This guide belongs to the kit, and a kit upgrade replaces it, so the project does not edit it. Its examples name the kit's Notes slice. Once Notes is gone, the reference slice that `AGENTS.md` names shows the same patterns.
+
 ## Layout
 
 ```
@@ -43,10 +45,11 @@ UI code may not make outgoing requests or touch the file system. Put that behind
 - The queue or scheduler that runs jobs is an adapter. The composition root registers each slice's jobs with it and sets their schedules from configuration.
 - A use case that puts work on a queue does so through a port, which the queue adapter implements.
 - When the service runs as more than one process, such as an API and a worker, each process gets its own directory under `cmd/`, such as `cmd/server` and `cmd/worker`.
+- When an adapter holds a resource that must be closed, such as a database pool, `live.go` returns it with the dependencies, and `main.go` closes it on shutdown. Migrations run before the process serves, at start or from their own command under `cmd/`.
 
 ## Adapters
 
-An adapter package imports the domain and whatever libraries it needs. It keeps its stored or wire records unexported and maps them to domain types. Guard mutable state with a `sync.Mutex`. The `filestore` adapter shows atomic writes: it writes a temporary file and then renames it.
+An adapter package imports the domain and whatever libraries it needs. It keeps its stored or wire records unexported and maps them to domain types. Guard mutable state with a `sync.Mutex`.
 
 For SQL databases, keep numbered migrations in the adapter, and never edit a migration that has shipped. A helper that creates a real database for tests lives in the adapter package, next to the adapter's tests, because test support may not import adapters.
 
@@ -63,7 +66,7 @@ For SQL databases, keep numbered migrations in the adapter, and never edit a mig
 - Tests use the standard `testing` package. Domain and middleware tests that need test support live in external test packages, such as `domain_test`, to avoid an import cycle.
 - A stub is a struct in test support with exported fields for the results a test sets, like `StubNoteStore`. It records what it receives, guards that record with a mutex, and asserts at compile time that it implements the port: `var _ domain.NoteStore = (*StubNoteStore)(nil)`.
 - Test support also holds sample data, like `SampleNote`, and small fakes for ports whose state a test drives, like `FakeClock`.
-- The adapter's own tests run against the real system. The `filestore` tests use `t.TempDir()`.
+- The adapter's own tests run against the real system, such as a real database or `t.TempDir()`.
 - `internal/app/app_test.go` is the composition test. It builds the app with stubs and checks which middleware the slices receive.
 
 Tests must pass in any order and without data races.

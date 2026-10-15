@@ -124,7 +124,7 @@ Lines that start with `//` are comments.
 - **`language`.** `swift`, `go`, or `typescript`.
 - **`sourceRoots`.** Directories to scan. The templates scan the whole repository (`.`), so a source file outside every module fails as unmapped.
 - **`testFiles` and `ignore`.** Glob patterns, matched against paths from the repository root. `*` stays within one directory and `**` crosses directories, so `*.config.ts` matches only files in the root. Test files are exempt from the import rules.
-- **`glossary`.** The glossary file. Its level-2 headings are the terms banned from modules with `"bannedTerms": "glossary"`.
+- **`glossary`.** The glossary file. Its level-2 headings are the terms banned from modules with `"bannedTerms": "glossary"`. The check splits identifiers into words, so the heading "API key" matches `apiKey`, `APIKey`, `api_key`, and `apiKeys`. A one-word heading that is also a common word, such as "Sync", matches identifiers like `readFileSync`, so prefer specific headings such as "Sync run".
 - **`modules`.** Maps directories to kinds.
   - `path` may use `*` for one directory level, and `{1}` in `name` or `slice` inserts what the first `*` matched.
   - Swift module names must match the target names, because Swift imports name targets.
@@ -152,6 +152,8 @@ Tested on macOS on 2026-10-14 with Python 3.14, Swift 6.4 and Xcode 27, Go 1.27,
   - feature code and control flow in the composition root
   - unmapped files
   - cycles
+  - imports of files that belong to no module, such as configuration files
+  - production code that imports test files
 - **Baseline.** Accepted violations pass, new ones fail, and fixed ones trigger a note to lower the baseline.
 - **Stop hook.** It blocks the first stop while the check fails, allows the second stop, and does nothing when no files changed. I tested it by running the script directly.
 - **Adoption.** `adopt` worked on a small legacy Go project: mapping, baseline, and a new violation failing.
@@ -166,6 +168,11 @@ Retested on Linux on 2026-10-15 with Node 24.22, after fixes from a test setup b
 - **`init` in an empty clone.** `init typescript` and `init go` work in a directory that holds only `.git`, and `./check` passes, including the install step from an empty `node_modules`.
 - **Architecture check.** A `.js` file in the domain is checked like a `.ts` file. `@hono/*` in `external.allow` allows `@hono/node-server`. A reference to an unknown set fails with a configuration error.
 - **Stop hook.** In a repository without commits, it runs `./check` when files exist.
+
+Retested on Linux on 2026-10-15 with Node 24.22, after a second test setup by a fresh agent:
+
+- **Architecture check.** Glossary terms match identifiers by words, including acronyms and plurals. An import of an unmapped file and an import of a test file from production code both fail. The check passes on all three templates.
+- **New projects.** `init typescript` and `init go` pass `./check`.
 
 Not tested:
 

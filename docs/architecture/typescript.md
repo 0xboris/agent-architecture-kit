@@ -2,6 +2,8 @@
 
 This guide shows how each part of `docs/ARCHITECTURE.md` looks in TypeScript. It holds the rules that come from the language. `docs/architecture/stack.md` names the libraries this project uses, such as the HTTP framework and the test runner, and how the reference slice uses them.
 
+This guide belongs to the kit, and a kit upgrade replaces it, so the project does not edit it. Its examples name the kit's Notes slice. Once Notes is gone, the reference slice that `AGENTS.md` names shows the same patterns.
+
 ## Layout
 
 ```
@@ -52,15 +54,17 @@ The domain imports no packages and no Node built-ins. It must not call `Date.now
 
 ## Adapters
 
-An adapter imports the domain and any packages it needs. It parses what it reads, since stored data is outside data, and maps it to domain types. `FileNoteStore` shows how to serialize access with a promise queue and how to write atomically with a temporary file and a rename.
+An adapter imports the domain and any packages it needs. It parses what it reads, since stored data is outside data, and maps it to domain types.
 
-Schema files and migrations belong to the adapter that owns the storage. Never edit a migration that has shipped. A helper that creates a real database for tests lives in the adapter module, next to the adapter's tests, because test support may not import adapters.
+Schema files and migrations belong to the adapter that owns the storage. Never edit a migration that has shipped. A helper that creates a real database for tests lives in the adapter module, next to the adapter's tests, in a `*.testing.ts` file, because test support may not import adapters.
 
 ## Composition root
 
 - `container.ts` defines `Dependencies` and `createApp`. `createApp` applies the mandatory middleware and collects every slice.
 - `wire-<slice>.ts` builds the slice's use cases and UI, and decides which optional middleware the slice gets.
 - `live.ts` creates the real adapters, `config.ts` reads the environment, and `main.ts` starts the process.
+- When an adapter holds a resource that must be closed, such as a database pool, `live.ts` returns it next to the dependencies, and `main.ts` closes it on shutdown.
+- Migrations run before the process serves. `main.ts` applies them at start, or a separate entry file such as `migrate.ts` does.
 - Control flow is allowed only in `config.ts`. Elsewhere, handle a failed start with `.catch()` on the promise, which the check allows, rather than with `try` and `catch`.
 
 ## Tests
@@ -68,5 +72,6 @@ Schema files and migrations belong to the adapter that owns the storage. Never e
 - A test file sits next to the code it tests and ends in `.test.ts`.
 - A stub is an object literal typed as the port, such as `const store: NoteStore = { ... }`. The compiler then fails the test when the port changes. Record calls with the test runner's mock functions, typed with the port's method, such as `NoteStore['save']`.
 - Test support holds sample data, like `sampleNote`, and small fakes for ports whose state a test drives, like `FakeClock`.
-- The adapter's own tests run against the real system. `FileNoteStore`'s tests use a temporary directory.
+- The adapter's own tests run against the real system, such as a real database or a temporary directory.
+- Name a helper that only tests use, such as a function that creates a database for the adapter's tests, `*.testing.ts`. The check treats it as test code, so production code cannot import it.
 - `src/app/container.test.ts` is the composition test. It builds the app with stubs and checks which middleware the slices receive.

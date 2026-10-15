@@ -26,7 +26,7 @@ The Platform adapter implements `AppLogger` with `os.Logger`. Test support guard
 
 ## Storage
 
-`FileNoteStore` keeps the notes in a JSON file. It stands in for Core Data or SwiftData until the app needs one.
+`FileNoteStore` in the Persistence target keeps the notes in a JSON file. It stands in for Core Data or SwiftData until the app needs one. It maps between `NoteRecord` and `Note`, and `NoteRecord` never leaves Persistence. `FileNoteStoreTests` runs it against a temporary directory.
 
 ## Commands
 
@@ -35,7 +35,7 @@ The Platform adapter implements `AppLogger` with `os.Logger`. Test support guard
 ## Changing a framework
 
 1. Allow the new framework for the kinds that use it in `architecture.json`, under `external.allow`. Frameworks belong in UI, adapters, and the composition root, never in the domain or use cases.
-2. Rewrite the reference slice and its tests with the new framework, so that agents copy the new patterns. Keep what the slice does unchanged: it exists to show patterns, and new behavior belongs in real slices.
+2. Rewrite the reference slice and its tests with the new framework, so that agents copy the new patterns. Keep what the slice does unchanged: it exists to show patterns, and new behavior belongs in real slices. Wire details that the new library decides, such as its validation errors, may change; note them here.
 3. Update the commands in `./check` and the CI workflow.
 4. Add any new compiler, linter, or test runner settings file to `.github/CODEOWNERS` if it does not match a listed pattern yet.
 5. Update this file. List frameworks that the project has chosen but no code uses yet under a heading such as "Chosen, not set up yet", so that the next agent knows they are decided.

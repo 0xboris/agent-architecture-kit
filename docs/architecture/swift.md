@@ -2,6 +2,8 @@
 
 This guide shows how each part of `docs/ARCHITECTURE.md` looks in Swift. It holds the rules that come from the language and from Swift packages. `docs/architecture/stack.md` names the frameworks this project uses, such as the UI framework and the test framework, and how the reference slice uses them.
 
+This guide belongs to the kit, and a kit upgrade replaces it, so the project does not edit it. Its examples name the kit's Notes slice. Once Notes is gone, the reference slice that `AGENTS.md` names shows the same patterns.
+
 ## Layout
 
 All modules are targets of one local package, `Packages/AppModules`. The Xcode app target holds only `App/<Name>App.swift`, which creates the `AppContainer` and shows `RootView`.
@@ -42,9 +44,9 @@ The domain imports only Foundation, for value types such as `Date` and `UUID`. I
 
 ## Adapters
 
-An adapter target imports the domain and its library. It maps between its own records and domain types; `NoteRecord` never leaves Persistence. Use an `actor` when the adapter has mutable state.
+An adapter target imports the domain and its library. It maps between its own records and domain types, and its records never leave the adapter. Use an `actor` when the adapter has mutable state.
 
-For Core Data or SwiftData, put the managed objects or `@Model` types in the Persistence adapter and map them to domain structs there. Keep each versioned schema in its own file, and never change a schema that has shipped. Add a new version with a migration stage instead.
+For Core Data or SwiftData, put the managed objects or `@Model` types in the persistence adapter and map them to domain structs there. Keep each versioned schema in its own file, and never change a schema that has shipped. Add a new version with a migration stage instead.
 
 ## Composition root
 
@@ -60,7 +62,7 @@ Allowed file names and the size limit are in `architecture.json`.
 
 - A stub is an actor in TestSupport that conforms to the port, like `StubNoteStore`. Its initializer takes the results a test wants, and it records what it receives in a property, such as `saved`.
 - TestSupport also holds sample data, like `Samples.note`, and small fakes for ports whose state a test drives, like `FakeTimeSource` and `SequentialIDGenerator`.
-- The adapter's own tests run against the real system. `FileNoteStoreTests` uses a temporary directory.
+- The adapter's own tests run against the real system, such as a temporary directory.
 - `AppCompositionTests` builds `AppContainer` with stubs and checks which middleware the slices receive.
 
 ## Concurrency

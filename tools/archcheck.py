@@ -72,6 +72,30 @@ def glob_to_regex(pattern):
     return re.compile("^" + "".join(out) + "$")
 
 
+IDENTIFIER = re.compile(r"[A-Za-z_$][A-Za-z0-9_$]*")
+WORD_PART = re.compile(r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|[0-9]+")
+
+
+def word_parts(text):
+    """Splits 'apiKeyStore', 'APIKeyStore', and 'api_key_store' into ['api', 'key', 'store']."""
+    return [part.lower() for part in WORD_PART.findall(text)]
+
+
+def term_lines(clean, term):
+    """Line numbers where an identifier contains the term's words in a row."""
+    wanted = word_parts(term)
+    *head, last = wanted
+    endings = {last, last + "s", last + "es"}
+    lines = set()
+    for m in IDENTIFIER.finditer(clean):
+        parts = word_parts(m.group(0))
+        for i in range(len(parts) - len(wanted) + 1):
+            if parts[i:i + len(head)] == head and parts[i + len(head)] in endings:
+                lines.add(line_of(clean, m.start()))
+                break
+    return sorted(lines)
+
+
 def matches_any(path, patterns):
     return any(glob_to_regex(p).match(path) for p in patterns)
 
@@ -266,7 +290,7 @@ class Project:
                 if line.startswith("## "):
                     words = re.findall(r"[A-Za-z0-9]+", line[3:])
                     if words:
-                        terms.append("".join(w[:1].upper() + w[1:] for w in words))
+                        terms.append(" ".join(words))
         return terms
 
     # ----------------------------------------------------------- imports
@@ -315,6 +339,8 @@ class Project:
                 break
         if target.startswith("."):
             resolved = os.path.normpath(os.path.join(os.path.dirname(rel), target)).replace(os.sep, "/")
+            if matches_any(resolved, self.config.get("testFiles", [])):
+                return ("test-file", resolved)
             module = self.module_for_path(resolved)
             return ("module", module) if module else ("missing", resolved)
         return ("external", target)
@@ -435,7 +461,6 @@ def check(project):
         for entry in kind_config.get("forbiddenCalls", []):
             calls.extend(lookup_set(project, "forbiddenCallSets", entry) if is_set_reference(entry) else [entry])
         banned_terms = terms if kind_config.get("bannedTerms") == "glossary" else kind_config.get("bannedTerms", [])
-        term_regexes = [(t, re.compile(re.escape(t) + "|\\b" + re.escape(t[:1].lower() + t[1:]))) for t in banned_terms]
         composition = kind_config.get("composition")
         total_lines = 0
 
@@ -454,6 +479,16 @@ def check(project):
                             "import", f"import:{module.name}->{value.name}", rel, line,
                             f"{module.label()} imports {value.label()}. A {module.kind} module may import {describe_allowed(kind_config)}.",
                             import_fix(module, value)))
+                elif kind_of == "missing":
+                    violations.append(Violation(
+                        "unresolved", f"unresolved:{rel}->{value}", rel, line,
+                        f"{module.label()} imports '{value}', which belongs to no module in architecture.json.",
+                        "Import code from a mapped module. Configuration and ignored files are not imported by modules."))
+                elif kind_of == "test-file":
+                    violations.append(Violation(
+                        "test-import", f"test-import:{rel}->{value}", rel, line,
+                        f"{module.label()} imports the test file '{value}'.",
+                        "Production code never imports test code. Move what both need into the module itself."))
                 elif kind_of == "external":
                     if not external_allowed(project, kind_config, value):
                         violations.append(Violation(
@@ -468,8 +503,8 @@ def check(project):
                         "call", f"call:{module.name}:{call['pattern']}", rel, line_of(clean, m.start()),
                         f"{module.label()} uses `{m.group(0).strip()}`.", call.get("fix", "")))
 
-            for term, regex in term_regexes:
-                for number in sorted({line_of(clean, m.start()) for m in regex.finditer(clean)}):
+            for term in banned_terms:
+                for number in term_lines(clean, term):
                     violations.append(Violation(
                         "term", f"term:{module.name}:{term}", rel, number,
                         f"{module.label()} has no business meaning, but uses the glossary term '{term}'.",
