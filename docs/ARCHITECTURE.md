@@ -36,6 +36,8 @@ An arrow points from a module to what it may depend on. Dependencies point inwar
 - **Composition root.** The entry point. It creates the adapters, applies middleware, wires every slice, reads configuration, and starts the process. It is the only code that knows which implementation stands behind each port. Nothing depends on it.
 - **Utilities.** Helpers with no business meaning, such as the logging interface or a result type. They depend on nothing in the project.
 - **Test support.** Sample data, stubs, and small fakes for tests. Only test code depends on it.
+- **Screens.** In an app with pages, a screen arranges the public UI of one or more slices on one page, such as a home page made of a list from one slice and a status box from another. It depends on the UI of slices, through each slice's public entry, and on shared UI. It calls no use cases and makes no decisions. The composition root maps routes to screens.
+- **Shared domain.** In a repository with several apps, the model types, parse functions, and pure rules that more than one app uses. It holds no ports and no use cases, performs no I/O, and depends on nothing, so it runs unchanged in every app, a browser included.
 
 ## Feature slices
 
@@ -109,6 +111,23 @@ The composition root holds wiring and nothing else.
 - **Errors are explicit.** No error is swallowed. An error that leaves a module tells the caller what it can do and carries its cause. Log each error once, where it is handled, with internal ids and no personal data.
 - **Authorization is checked where requests enter.** Every entry point that acts for a caller checks that the caller may act on each record that the request touches.
 
+## Several apps in one repository
+
+A repository can hold several apps, such as an API and the web app that calls it. Each app has the layers above, with its own composition root, slices, domain, and adapters. Between the apps, two rules hold.
+
+- **Rules are shared as code.** A rule that several apps need, such as the rules for a valid title, lives once in the shared domain, and each app's domain and slices import it. A web form then gives the same answer as the API, from the same code.
+- **Data goes only through the API.** A client app reads and writes through the API over HTTP, with a client generated from the API's contract, its OpenAPI document. No app imports another app's code. The architecture check fails on any import between apps.
+
+From these follow:
+
+- **Each app keeps its own ports.** The API's storage port and the web app's API port mean nothing to the other app, so they stay in each app's own domain.
+- **The contract is generated and committed.** The API generates its contract from its routes, and each client generates its typed API client from the contract. `./check` fails when either is out of date, so a change to the contract shows up in review, like a change to a stored format. The rules for data that outlives code apply to it: installed clients keep calling the old shape.
+- **The client's API adapter parses with the shared rules.** It maps the wire types that the contract describes to domain types, through the shared parse functions, as any adapter parses outside data.
+- **The API is the authority.** A client runs the shared rules early, to answer the user before a request is sent. The API checks every request again, because the apps are deployed separately and a client may briefly run an older rule.
+- **Clients in other repositories get only the contract.** A mobile app in its own repository generates its client from the same contract and has no shared code. Its checks follow the constraints that the contract states, and the API's answer decides.
+
+A page that combines several features is a screen when it only shows what the slices already offer, unchanged. When the page needs data or decisions of its own, such as failed runs across every resource this week, it is a capability of its own: a new slice with its own use case, which reads the domain's ports. Slices still never import each other.
+
 ## State and concurrency
 
 - Prefer immutable values. Shared mutable state has one owner that serializes access, and each check happens in the same call as the action that depends on it.
@@ -144,6 +163,11 @@ Ask these questions in order. The first yes decides.
 8. Does it create objects, read configuration, or start the process? The composition root.
 9. Is it a helper with no business meaning? Utilities.
 
+In a repository with several apps, two questions come before the list:
+
+- Does another app in the repository need the same rule or model? The shared domain, without ports.
+- Does it arrange the UI of several slices on one page, with no data or decisions of its own? A screen.
+
 When the code needs something its module may not import:
 
 - If it needs an outside capability, add a port and pass the adapter in through the composition root.
@@ -158,6 +182,7 @@ When the code needs something its module may not import:
   - I/O calls in modules that must not perform I/O
   - glossary terms in utilities and shared UI
   - the shape of the composition root
+  - imports between apps, and imports into a module that bypass its public entry
   - cycles
 - **The baseline** (`architecture-baseline.json`) records violations that existed before the rules were adopted. The check fails only when a change adds a violation. When code is fixed, the baseline is lowered.
 - **Gate files** define the checks: `architecture.json`, the baseline, `check`, `tools/`, `.claude/`, `.github/`, and the instruction files. A code-owner rule requires the owner's review for every change to them. Never change a gate file to make a check pass.

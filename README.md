@@ -130,12 +130,15 @@ Lines that start with `//` are comments.
 - **`modules`.** Maps directories to kinds.
   - `path` may use `*` for one directory level, and `{1}` in `name` or `slice` inserts what the first `*` matched.
   - Swift module names must match the target names, because Swift imports name targets.
+  - `app` names the app a module belongs to, in a repository with several apps. Modules of different apps may not import each other. A module without `app`, such as the shared domain, may be imported from every app.
 - **`kinds`.** Sets the rules for each kind:
   - `mayImport`: kinds this kind may import. `*` means every kind except test support, and `usecases@same-slice` allows only the importing module's own slice.
   - `external`: `allow` and `deny` patterns for frameworks and packages. In Go, `std` means the standard library.
   - `forbiddenCalls`: regular expressions, or `@set` references, with the fix to show.
   - `bannedTerms`: `"glossary"` or a list of words.
   - `composition`: `allowedFiles`, `controlFlowAllowedIn`, `controlFlowAllowedPatterns`, and `maxLines`.
+  - `publicEntry`: file names, such as `["index.ts"]`. Other modules may import a module of this kind only through one of these files. TypeScript only.
+- **`typescript.aliases`.** Maps import names to directories, such as a workspace package `@acme/domain` to `packages/domain/src`, so that the check resolves those imports to modules.
 - **`externalSets` and `forbiddenCallSets`.** Named lists that kinds refer to as `@name`. An entry with a slash, such as `@hono/node-server` or `@hono/*`, is a scoped npm package, not a set. A reference to a set that does not exist fails the check.
 
 To allow a library in the domain, such as a decimal type, add it to the domain's `external.allow`. That is a deliberate change to a gate file, so it goes through your review.
@@ -176,7 +179,15 @@ Retested on Linux on 2026-10-15 with Node 24.22, after a second test setup by a 
 - **Architecture check.** Glossary terms match identifiers by words, including acronyms and plurals. An import of an unmapped file and an import of a test file from production code both fail. The check passes on all three templates.
 - **New projects.** `init typescript` and `init go` pass `./check`.
 
+On 2026-10-19, `coco-dashboard` was moved to the layout for several apps in one repository: an API, a React web app, and a shared domain package. Tested there:
+
+- **The check.** It reports an import between apps, an import into a slice's UI that bypasses `ui/index.ts`, a screen that imports use cases, and a package import in the shared domain.
+- **The contract.** `./check` fails when `openapi.json` no longer matches the API's routes.
+- **The app.** The web app, in Chromium against the API on a Postgres-compatible server (PGlite), creates, lists, and opens notes. An empty title is rejected in the browser before any request.
+
 Not tested:
+
+- **A template for several apps.** `init` still creates one app. The layout is described in `docs/ARCHITECTURE.md` and `docs/architecture/typescript.md`, and `coco-dashboard` is the only worked example.
 
 - **The Swift template after 2026-10-15.** Its new `StubNoteStore` and the rewritten tests have not been compiled. Run `./check` on macOS before relying on them.
 

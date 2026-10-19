@@ -379,6 +379,10 @@ SOURCE_FIXES = {
     "shared-ui": "Shared UI depends only on utilities. Pass plain values in instead of domain types.",
     "adapter": "Adapters depend only on the domain and utilities. The composition root connects them to the rest.",
     "test-support": "Test support depends only on the domain and utilities.",
+    "shared-domain": "The shared domain imports nothing, so that every app can use it. Keep only model types, "
+                     "parse functions, and pure rules there.",
+    "screen": "A screen only arranges the public UI of slices. Let the slice's UI call its use cases, "
+              "and import the slice's UI from its public entry.",
 }
 TARGET_FIXES = {
     "adapter": "Depend on a port declared in the domain. The composition root passes the adapter in.",

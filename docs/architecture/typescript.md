@@ -75,3 +75,29 @@ Schema files and migrations belong to the adapter that owns the storage. Never e
 - The adapter's own tests run against the real system, such as a real database or a temporary directory.
 - Name a helper that only tests use, such as a function that creates a database for the adapter's tests, `*.testing.ts`. The check treats it as test code, so production code cannot import it.
 - `src/app/container.test.ts` is the composition test. It builds the app with stubs and checks which middleware the slices receive.
+
+## Several apps in one repository
+
+A pnpm workspace holds the apps and the shared domain. `docs/ARCHITECTURE.md` gives the rules; this is how they look in TypeScript.
+
+```
+packages/domain/src/             shared domain: model, parse functions, pure rules, Result; index.ts is its entry
+apps/api/                        the service, laid out as above, with openapi.json next to its package.json
+apps/web/src/app/                composition root: main.tsx, container.tsx, routes.tsx, config.ts, live.ts, wire-<slice>.ts
+apps/web/src/domain/             the web app's ports, such as the API it calls
+apps/web/src/features/<slice>/   usecases/ and ui/, with ui/index.ts as the UI's public entry
+apps/web/src/screens/<name>/     pages that arrange the public UI of slices
+apps/web/src/sharedui/           layout, styles, and components without business meaning
+apps/web/src/adapters/api/       the generated API client and the adapter that parses its responses
+```
+
+- **One `architecture.json` at the root** maps the modules of every app. Each module of an app has an `"app"` field, and the shared domain has none. An import between apps fails as `app`.
+- **The shared domain is a workspace package**, such as `@acme/domain`, whose `exports` field points at `src/index.ts`. Apps import it by name, and `typescript.aliases` in `architecture.json` maps the name to its directory, so the check sees the import. Its `tsconfig.json` sets `"types": []`, so code that needs Node does not compile there. It holds `Result` too, since it may not import an app's utilities.
+- **Kinds differ per app where the libraries differ.** An app whose UI uses other libraries gets kinds of its own, such as `web-ui` and `web-composition` next to `ui` and `composition`. Kinds without libraries, such as `domain` and `usecases`, are shared by every app.
+- **A slice's UI has a public entry.** `"publicEntry": ["index.ts"]` on the UI kind makes every other module, screens and the composition root included, import the slice's UI from `ui/index.ts`. The check reports any import that reaches past it.
+- **UI components get their use cases from the slice.** The slice's UI exports a provider, such as `NotesProvider`, that the composition root fills with the slice's use cases. Components read them from it, so a screen can place a component without knowing its use cases.
+- **Screens import slice UI and shared UI only.** Routes are defined in code in the composition root, not by a framework's file layout, and each route shows one screen.
+- **The contract lives with the API.** A composition file, such as `openapi.ts`, prints the OpenAPI document from the routes, and the API commits it as `openapi.json`. The web app generates its client types from it into `adapters/api/`. `./check` regenerates both and fails when either differs from the committed file.
+- **The API adapter of a client** implements the client's port with the generated client and parses every response with the shared parse functions. Its tests answer requests with recorded responses in the contract's shape.
+- **Tests of UI components** render them with real use cases on a stubbed port, inside the providers they need. A helper that sets this up is a `*.testing.tsx` file in the slice's UI, so production code cannot import it.
+
