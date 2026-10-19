@@ -165,8 +165,8 @@ def line_of(code, index):
 # ------------------------------------------------------------------ project
 
 class Module:
-    def __init__(self, name, kind, path, slice_name):
-        self.name, self.kind, self.path, self.slice = name, kind, path, slice_name
+    def __init__(self, name, kind, path, slice_name, app=None):
+        self.name, self.kind, self.path, self.slice, self.app = name, kind, path, slice_name, app
         self.files = []
 
     def label(self):
@@ -199,7 +199,8 @@ class Project:
                     raise ConfigError(f"architecture.json: module '{spec['path']}' uses unknown kind '{kind}'")
                 name = self._fill(spec.get("name", path), captures)
                 slice_name = self._fill(spec["slice"], captures) if "slice" in spec else None
-                modules.append(Module(name, kind, path, slice_name))
+                app = self._fill(spec["app"], captures) if "app" in spec else None
+                modules.append(Module(name, kind, path, slice_name, app))
         return modules
 
     @staticmethod
@@ -318,6 +319,17 @@ class Project:
                 found.append((m.group(1), line_of(stripped, m.start(1))))
         return found
 
+    def resolved_path(self, rel, target):
+        """The repository path that a TypeScript import points to, or None for packages."""
+        if self.language != "typescript":
+            return None
+        for alias, replacement in self.config.get("typescript", {}).get("aliases", {}).items():
+            if target.startswith(alias):
+                return os.path.normpath(replacement + target[len(alias):]).replace(os.sep, "/")
+        if target.startswith("."):
+            return os.path.normpath(os.path.join(os.path.dirname(rel), target)).replace(os.sep, "/")
+        return None
+
     def resolve(self, rel, target):
         """Returns ('module', Module) for project imports, ('external', name) otherwise, ('missing', path)."""
         if self.language == "swift":
@@ -401,7 +413,8 @@ def import_allowed(project, source, target):
             if target.kind != "test-support":
                 return True
         elif entry.endswith("@same-slice"):
-            if target.kind == entry.split("@")[0] and target.slice is not None and target.slice == source.slice:
+            if (target.kind == entry.split("@")[0] and target.slice is not None
+                    and target.slice == source.slice and target.app == source.app):
                 return True
         elif entry == target.kind:
             return True
@@ -474,6 +487,24 @@ def check(project):
                 if kind_of == "module":
                     if value is not module:
                         graph[module.name].add(value.name)
+                    if value.app is not None and module.app is not None and value.app != module.app:
+                        violations.append(Violation(
+                            "app", f"app:{module.name}->{value.name}", rel, line,
+                            f"{module.label()} in app '{module.app}' imports {value.label()} in app '{value.app}'.",
+                            "Apps never import each other. Share rules through a module without an app, "
+                            "such as the shared domain, and exchange data through the API."))
+                        continue
+                    entries = project.kinds[value.kind].get("publicEntry", [])
+                    if entries and value is not module:
+                        path = project.resolved_path(rel, target)
+                        public = {value.path} | {f"{value.path}/{e}" for e in entries} \
+                            | {f"{value.path}/{os.path.splitext(e)[0]}" for e in entries}
+                        if path is not None and path not in public:
+                            violations.append(Violation(
+                                "public-entry", f"public-entry:{rel}->{path}", rel, line,
+                                f"{module.label()} imports '{path}', which is inside {value.label()}.",
+                                f"Import from the module's public entry, {value.path}/{entries[0]}, "
+                                f"and export what other modules need from there."))
                     if not import_allowed(project, module, value):
                         violations.append(Violation(
                             "import", f"import:{module.name}->{value.name}", rel, line,
@@ -589,7 +620,7 @@ def module_map(project):
         lines.append(f"May import: {allowed}.")
         lines.append("")
         for m in sorted(members, key=lambda m: m.name):
-            slice_note = f", slice {m.slice}" if m.slice else ""
+            slice_note = (f", app {m.app}" if m.app else "") + (f", slice {m.slice}" if m.slice else "")
             lines.append(f"- `{m.name}`{slice_note}: `{m.path}`")
         lines.append("")
     return "\n".join(lines)
