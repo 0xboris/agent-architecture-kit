@@ -37,6 +37,8 @@ An arrow points from a module to what it may depend on. Dependencies point inwar
 - **Utilities.** Helpers with no business meaning, such as the logging interface or a result type. They depend on nothing in the project.
 - **Test support.** Sample data, stubs, and small fakes for tests. Only test code depends on it.
 - **Screens.** In an app with pages, a screen arranges the public UI of one or more slices on one page, such as a home page made of a list from one slice and a status box from another. It depends on the UI of slices, through each slice's public entry, and on shared UI. It calls no use cases and makes no decisions. The composition root maps routes to screens.
+  - A screen connects slices. It passes a value from one slice's UI to another's, such as the current user's id, and fills a slot in one slice's UI with another slice's UI, such as how an author's name is shown. A slice's UI takes what it needs from another slice as such a parameter, never as an import.
+  - A slice's UI links only to its own slice's pages. A link to another slice's page is a parameter that the screen fills.
 - **Shared domain.** In a repository with several apps, the model types, parse functions, and pure rules that more than one app uses. It holds no ports and no use cases, performs no I/O, and depends on nothing, so it runs unchanged in every app, a browser included.
 
 ## Feature slices
@@ -44,6 +46,7 @@ An arrow points from a module to what it may depend on. Dependencies point inwar
 A slice is one capability of the product, such as transactions, budgets, or recurring transactions. It has a UI module and a use case module. A slice can have several entry points: screens, endpoints, and background work that the composition root triggers, such as a scheduled job.
 
 - Slices never depend on each other. When two slices need the same type or rule, it moves into the domain.
+- Ports belong to the domain, not to a slice. Any slice's use case may use any port, such as a use case that creates a note and checks its author through the user store.
 - Use cases are never shared. Each slice writes its own use cases, even when two of them look alike. The rules they use are shared, through the domain.
 - A new capability gets a new slice. Do not grow an existing slice into something it was not made for.
 - Create a slice by copying the structure of the reference slice: its modules, its tests, and its wiring file.
@@ -107,7 +110,7 @@ The composition root holds wiring and nothing else.
 
 - **Parse at the edge.** Data from outside the process becomes domain types where it enters. This includes requests, responses, database rows, files, stored settings, and deep links. Inside, code trusts its types.
 - **One model per boundary.** Wire types, storage types, and domain types stay separate even when they look alike. Adapters and UI map between them.
-- **Data outlives code.** Data that older versions stored, and clients that are still installed, will meet the new code. Change stored formats and wire contracts by adding: add optional fields, keep old fields until nothing uses them, and map unknown enumeration values to an unknown case. Renaming or removing a stored or sent field is a deliberate decision with a migration path.
+- **Data outlives code.** Data that older versions stored, and clients that are still installed, will meet the new code. That includes what a client keeps on the device, such as a key in the browser's storage. Change stored formats and wire contracts by adding: add optional fields, keep old fields until nothing uses them, and map unknown enumeration values to an unknown case. Renaming or removing a stored or sent field is a deliberate decision with a migration path.
 - **Errors are explicit.** No error is swallowed. An error that leaves a module tells the caller what it can do and carries its cause. Log each error once, where it is handled, with internal ids and no personal data.
 - **Authorization is checked where requests enter.** Every entry point that acts for a caller checks that the caller may act on each record that the request touches.
 
@@ -147,6 +150,7 @@ A page that combines several features is a screen when it only shows what the sl
 - **Composition tests check the wiring**, such as which middleware a slice receives.
 - **Tests follow behavior.** They use a module's public interface and assert on results, on state, and on the calls a use case makes to its ports. They never assert on calls between a module's own parts, so a refactor that keeps behavior keeps every test green.
 - **Tests are deterministic.** They use a fake clock and fixed ids, never real time, the network, or unseeded randomness. They pass in any order. A flaky test is a bug.
+- **Migrations are tested on old data.** A migration that changes existing rows, such as one that adds a required column and fills it, gets a test that runs it on rows written by the previous version.
 - **Verification stays honest.** Every bug fix starts with a test that reproduces the bug. No check is made to pass by deleting, skipping, or loosening a test, or by changing a gate file.
 
 ## Where new code goes

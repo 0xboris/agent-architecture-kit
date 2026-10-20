@@ -5,11 +5,11 @@ import type { NoteStore } from '../ports.ts';
 import { LoggingNoteStore } from './loggingNoteStore.ts';
 
 test('saving through the middleware saves and logs', async () => {
-  const save = mock.fn<NoteStore['save']>(async () => {});
+  const save = mock.fn<NoteStore['save']>(() => Promise.resolve());
   const logger = new RecordingLogger();
   const note = sampleNote(1);
 
-  await new LoggingNoteStore({ allNotes: async () => [], save }, logger).save(note);
+  await new LoggingNoteStore({ allNotes: () => Promise.resolve([]), save }, logger).save(note);
 
   assert.deepEqual(save.mock.calls.map((call) => call.arguments), [[note]]);
   assert.deepEqual(logger.messages, ['note saved']);
@@ -17,10 +17,8 @@ test('saving through the middleware saves and logs', async () => {
 
 test('a failed save is not logged', async () => {
   const store: NoteStore = {
-    allNotes: async () => [],
-    save: async () => {
-      throw new Error('offline');
-    },
+    allNotes: () => Promise.resolve([]),
+    save: () => Promise.reject(new Error('offline')),
   };
   const logger = new RecordingLogger();
 

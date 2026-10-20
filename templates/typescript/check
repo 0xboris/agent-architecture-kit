@@ -25,6 +25,7 @@ fi
 
 step architecture python3 tools/archcheck.py
 step module-map python3 tools/archcheck.py --module-map docs/architecture/modules.md
+step lint npx oxlint
 step typecheck npx tsc --noEmit
 step test node --test --test-reporter=dot "src/**/*.test.ts"
 

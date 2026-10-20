@@ -6,8 +6,8 @@ import { CreateNote } from './createNote.ts';
 import { ListNotes } from './listNotes.ts';
 
 test('a created note gets its id and time from the ports and is saved', async () => {
-  const save = mock.fn<NoteStore['save']>(async () => {});
-  const store: NoteStore = { allNotes: async () => [], save };
+  const save = mock.fn<NoteStore['save']>(() => Promise.resolve());
+  const store: NoteStore = { allNotes: () => Promise.resolve([]), save };
   const now = new Date('2025-03-01T09:00:00Z');
   const createNote = new CreateNote({ store, clock: new FakeClock(now), ids: new SequentialIds() });
 
@@ -20,8 +20,8 @@ test('a created note gets its id and time from the ports and is saved', async ()
 });
 
 test('an invalid title is not saved', async () => {
-  const save = mock.fn<NoteStore['save']>(async () => {});
-  const store: NoteStore = { allNotes: async () => [], save };
+  const save = mock.fn<NoteStore['save']>(() => Promise.resolve());
+  const store: NoteStore = { allNotes: () => Promise.resolve([]), save };
   const createNote = new CreateNote({ store, clock: new FakeClock(), ids: new SequentialIds() });
 
   assert.deepEqual(await createNote.run(''), { ok: false, error: 'empty' });
@@ -30,10 +30,8 @@ test('an invalid title is not saved', async () => {
 
 test('a failed save reaches the caller', async () => {
   const store: NoteStore = {
-    allNotes: async () => [],
-    save: async () => {
-      throw new Error('offline');
-    },
+    allNotes: () => Promise.resolve([]),
+    save: () => Promise.reject(new Error('offline')),
   };
   const createNote = new CreateNote({ store, clock: new FakeClock(), ids: new SequentialIds() });
 
@@ -43,7 +41,7 @@ test('a failed save reaches the caller', async () => {
 test('notes are listed newest first', async () => {
   const older = sampleNote(1, new Date('2025-01-01T00:00:00Z'));
   const newer = sampleNote(2, new Date('2025-01-02T00:00:00Z'));
-  const store: NoteStore = { allNotes: async () => [older, newer], save: async () => {} };
+  const store: NoteStore = { allNotes: () => Promise.resolve([older, newer]), save: () => Promise.resolve() };
 
   assert.deepEqual(await new ListNotes({ store }).run(), [newer, older]);
 });

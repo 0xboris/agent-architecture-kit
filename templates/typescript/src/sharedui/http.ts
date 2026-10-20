@@ -39,7 +39,7 @@ export function readJson(request: IncomingMessage): Promise<unknown> {
       try {
         resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
       } catch (error) {
-        reject(error);
+        reject(new Error('The request body is not valid JSON.', { cause: error }));
       }
     });
     request.on('error', reject);

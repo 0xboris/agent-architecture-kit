@@ -22,14 +22,15 @@ async function withServer(store: NoteStore, run: (url: string) => Promise<void>)
   }
 }
 
-const emptyStore: NoteStore = { allNotes: async () => [], save: async () => {} };
+const emptyStore: NoteStore = { allNotes: () => Promise.resolve([]), save: () => Promise.resolve() };
 
 test('listing notes returns them', async () => {
-  const store: NoteStore = { allNotes: async () => [sampleNote(1)], save: async () => {} };
+  const store: NoteStore = { allNotes: () => Promise.resolve([sampleNote(1)]), save: () => Promise.resolve() };
   await withServer(store, async (url) => {
     const response = await fetch(`${url}/notes`);
     assert.equal(response.status, 200);
-    assert.deepEqual((await response.json()).map((note: { title: string }) => note.title), ['Note 1']);
+    const body = (await response.json()) as { title: string }[];
+    assert.deepEqual(body.map((note) => note.title), ['Note 1']);
   });
 });
 
@@ -37,7 +38,7 @@ test('posting a note returns created', async () => {
   await withServer(emptyStore, async (url) => {
     const response = await fetch(`${url}/notes`, { method: 'POST', body: JSON.stringify({ title: 'Groceries' }) });
     assert.equal(response.status, 201);
-    assert.equal((await response.json()).title, 'Groceries');
+    assert.equal(((await response.json()) as { title: string }).title, 'Groceries');
   });
 });
 
@@ -45,16 +46,14 @@ test('posting an empty title returns unprocessable', async () => {
   await withServer(emptyStore, async (url) => {
     const response = await fetch(`${url}/notes`, { method: 'POST', body: JSON.stringify({ title: ' ' }) });
     assert.equal(response.status, 422);
-    assert.equal((await response.json()).code, 'title_empty');
+    assert.equal(((await response.json()) as { code: string }).code, 'title_empty');
   });
 });
 
 test('a failed load returns a server error', async () => {
   const store: NoteStore = {
-    allNotes: async () => {
-      throw new Error('offline');
-    },
-    save: async () => {},
+    allNotes: () => Promise.reject(new Error('offline')),
+    save: () => Promise.resolve(),
   };
   await withServer(store, async (url) => {
     const response = await fetch(`${url}/notes`);

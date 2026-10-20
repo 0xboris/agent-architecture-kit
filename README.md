@@ -36,7 +36,7 @@ Each project receives:
 - Git, for the Stop hook.
 - Swift projects: a Swift 6 toolchain and Xcode.
 - Go projects: Go 1.24 or later.
-- TypeScript projects: Node 24 or later. The template uses TypeScript 7 for type checking, and Node runs the `.ts` files directly. It has no linter. typescript-eslint supports only TypeScript below 6.1 as of 2026-10-15, so a project that adds it pins TypeScript to 6.0.
+- TypeScript projects: Node 24 or later. The template uses TypeScript 7 for type checking, and Node runs the `.ts` files directly. It lints with oxlint, whose type-aware rules run on oxlint-tsgolint, which is built on TypeScript 7. typescript-eslint supports only TypeScript below 6.1 as of 2026-10-19, so it does not work with TypeScript 7.
 
 ## Start a new project
 
@@ -105,7 +105,15 @@ When agents keep making the same mistake, improve the tooling instead of adding 
 2. A better reference slice.
 3. A sentence in `docs/ARCHITECTURE.md`, only when nothing else can carry it.
 
-Upgrade a project to a newer kit by copying `tools/archcheck.py` and `tools/agent-stop-check.sh` from the kit, then running `./check`. Projects created before 2026-10-15 also have `tools/new.py`, which they can delete: new code now copies the reference slice.
+Upgrade a project to a newer kit by copying `tools/archcheck.py`, `tools/agent-stop-check.sh`, `docs/ARCHITECTURE.md`, and the project's language guide from `docs/architecture/` out of the kit, then running `./check`. The kit owns these files, so the project does not edit them. Read the diff of the docs: a new rule may need a change in the project. Projects created before 2026-10-15 also have `tools/new.py`, which they can delete: new code now copies the reference slice.
+
+TypeScript projects created before 2026-10-19 have no linter. To add it:
+
+1. Copy `templates/typescript/.oxlintrc.json` to the project root, and change the paths in its `overrides` to the project's source and domain directories. In a repository with several apps, `docs/architecture/typescript.md` says which paths to use.
+2. Add `oxlint` and `oxlint-tsgolint` to `devDependencies`, at the versions in `templates/typescript/package.json`. A project on TypeScript 6 or below can keep ESLint with typescript-eslint instead; the rules in the language guide hold either way.
+3. Add `step lint npx oxlint` to `./check`, before the type check, and add `/.oxlintrc.json` to `.github/CODEOWNERS`.
+4. Run `npx oxlint` and fix what it reports. Most findings in tests are stubs written as `async` functions without `await`, and JSON responses read as `any`.
+5. Describe the linter in `docs/architecture/stack.md`, as the template's copy does.
 
 ## Frameworks
 
@@ -184,6 +192,12 @@ On 2026-10-19, `coco-dashboard` was moved to the layout for several apps in one 
 - **The check.** It reports an import between apps, an import into a slice's UI that bypasses `ui/index.ts`, a screen that imports use cases, and a package import in the shared domain.
 - **The contract.** `./check` fails when `openapi.json` no longer matches the API's routes.
 - **The app.** The web app, in Chromium against the API on a Postgres-compatible server (PGlite), creates, lists, and opens notes. An empty title is rejected in the browser before any request.
+
+Retested on Linux on 2026-10-19 with Node 24.22, TypeScript 7.0.2, oxlint 1.88.0, and oxlint-tsgolint 7.0.2004:
+
+- **Lint.** `init typescript` creates a project whose `./check` passes, including the new lint step. Lint fails on `'x' as NoteTitle` in a slice's UI, passes it in the domain, fails on `JSON.parse` assigned to a typed value, and allows `as const`.
+- **Adoption.** `adopt typescript` adds `.oxlintrc.json` and keeps an existing one.
+- **Several apps.** `coco-dashboard` moved from TypeScript 6 and ESLint to TypeScript 7 and oxlint, and `./check` passes: the contract, lint, type checks of every package, Vitest, and the Vite build. Lint fails on an assertion in a slice's `.tsx` file and on a list item without a key, and allows assertions in the shared domain and in tests. openapi-typescript, which needs TypeScript's JavaScript API, runs with TypeScript 6 from a package of its own and generates the same client.
 
 Not tested:
 

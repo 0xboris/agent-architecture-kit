@@ -18,6 +18,7 @@ export interface Note {
 export function parseNoteTitle(raw: string): Result<NoteTitle, NoteTitleError> {
   const trimmed = raw.trim();
   if (trimmed === '') return { ok: false, error: 'empty' };
-  if ([...trimmed].length > maxTitleLength) return { ok: false, error: 'tooLong' };
+  // Array.from counts code points, so an emoji counts as one character, as in the Go template.
+  if (Array.from(trimmed).length > maxTitleLength) return { ok: false, error: 'tooLong' };
   return { ok: true, value: trimmed as NoteTitle };
 }

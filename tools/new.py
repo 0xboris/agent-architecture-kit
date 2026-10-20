@@ -50,7 +50,7 @@ COMPOSITION_PATHS = {
 TOOL_CONFIG_PATHS = {
     "swift": ["/.swiftlint.yml"],
     "go": ["/go.mod", "/.golangci.yml", "/.golangci.yaml"],
-    "typescript": ["/package.json", "/tsconfig*.json", "/eslint.config.*", "/vitest.config.*", "/pnpm-workspace.yaml", "/.npmrc"],
+    "typescript": ["/package.json", "/tsconfig*.json", "/.oxlintrc.json", "/oxlint.config.*", "/eslint.config.*", "/vitest.config.*", "/pnpm-workspace.yaml", "/.npmrc"],
 }
 
 
@@ -152,7 +152,9 @@ def adopt(args):
     report = []
     copy_kit_files(kit, dest, args.language, values, False, report)
     language_dir = os.path.join(kit, "templates", args.language)
-    for rel in ("architecture.json", ".claude/rules/architecture.md", "docs/architecture/stack.md"):
+    for rel in ("architecture.json", ".claude/rules/architecture.md", "docs/architecture/stack.md", ".oxlintrc.json"):
+        if not os.path.exists(os.path.join(language_dir, rel)):
+            continue
         target = os.path.join(dest, rel)
         if os.path.exists(target):
             report.append(f"kept existing {rel}")
@@ -172,6 +174,10 @@ def adopt(args):
         "Run `python3 tools/archcheck.py` until no file is reported as unmapped.",
         "Run `python3 tools/archcheck.py --write-baseline` to accept the existing violations.",
         "Describe the project's libraries in docs/architecture/stack.md, and allow them per kind in architecture.json.",
+    ] + ([
+        "Add the devDependencies oxlint and oxlint-tsgolint at the versions in the kit's templates/typescript/package.json, "
+        "edit the paths in .oxlintrc.json to match the project, and fix what `npx oxlint` reports.",
+    ] if args.language == "typescript" else []) + [
         f"Wire {check_target} into your build and CI, and adjust its build and test commands to this project.",
         "If CLAUDE.md already existed, add the line `@AGENTS.md` at its top.",
         "Name a reference slice in AGENTS.md: the existing slice that best follows docs/ARCHITECTURE.md, or one you rebuild in that shape.",

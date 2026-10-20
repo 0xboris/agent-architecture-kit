@@ -31,7 +31,7 @@ Node runs the TypeScript files directly by stripping types, and `tsc --noEmit` c
 
 ## Domain
 
-- **Model.** Interfaces with `readonly` fields, and branded types for values with rules, like `NoteTitle`. Only the parse function creates a branded value, and it is the one place where `as NoteTitle` is allowed.
+- **Model.** Interfaces with `readonly` fields, and branded types for values with rules, like `NoteTitle`. Only the parse function creates a branded value, and it is the one place where `as NoteTitle` is allowed. The linter rejects type assertions in production code outside the domain, so code elsewhere cannot create a branded value without its parse function. `as const` is not a type assertion and is allowed everywhere.
 - **Results.** Expected failures are a `Result` from utilities, with a union of error cases, like `NoteTitleError`. Throw only for unexpected failures.
 - **Rules.** Plain functions, like `newestFirst`.
 - **Ports.** Interfaces that return promises when the real implementation does I/O. When a call has several expected outcomes, return a union of them, so that callers handle each one.
@@ -67,6 +67,18 @@ Schema files and migrations belong to the adapter that owns the storage. Never e
 - Migrations run before the process serves. `main.ts` applies them at start, or a separate entry file such as `migrate.ts` does.
 - Control flow is allowed only in `config.ts`. Elsewhere, handle a failed start with `.catch()` on the promise, which the check allows, rather than with `try` and `catch`.
 
+## Lint
+
+The linter runs type-aware rules, which need type information from the compiler. Pick a linter that supports the project's TypeScript version: the templates use oxlint with oxlint-tsgolint, which is built on TypeScript 7, because typescript-eslint supports only TypeScript below 6.1. `docs/architecture/stack.md` names the linter and its settings file. Whatever the linter, these rules hold:
+
+- **No type assertions in production code outside the domain.** The domain asserts only in a parse function. Tests and test support may assert, for example on parsed response JSON.
+- **No `any` flowing into typed values.** The result of `JSON.parse` or `response.json()` is `any`. Production code parses it with a parse function or a schema; tests may assert its type.
+- **Every promise is awaited or handled.** A stub that only returns a value is written as `() => Promise.resolve(value)` or `() => Promise.reject(error)`, not as an `async` function without `await`.
+- **Generated code is not linted.** Exclude a generated file, such as an API client, in the linter's settings, and regenerate it instead of editing it.
+- **Fix a lint finding instead of silencing it.** A disable comment needs the owner's approval, like a change to the linter's settings.
+
+TypeScript 7.0's npm package holds the compiler but no JavaScript API: `import ts from 'typescript'` gives only its version. A tool that calls that API, such as a code generator that prints TypeScript, fails with TypeScript 7. Give such a tool a workspace package of its own that depends on the tool and on TypeScript 6, and run it from there. A package manager resolves a tool's `typescript` peer dependency from the package that depends on the tool, so the rest of the repository keeps TypeScript 7. Tools that only strip types, such as Node, Vite, and Vitest, work with any version.
+
 ## Tests
 
 - A test file sits next to the code it tests and ends in `.test.ts`.
@@ -97,6 +109,28 @@ apps/web/src/adapters/api/       the generated API client and the adapter that p
 - **A slice's UI has a public entry.** `"publicEntry": ["index.ts"]` on the UI kind makes every other module, screens and the composition root included, import the slice's UI from `ui/index.ts`. The check reports any import that reaches past it.
 - **UI components get their use cases from the slice.** The slice's UI exports a provider, such as `NotesProvider`, that the composition root fills with the slice's use cases. Components read them from it, so a screen can place a component without knowing its use cases.
 - **Screens import slice UI and shared UI only.** Routes are defined in code in the composition root, not by a framework's file layout, and each route shows one screen.
+- **Screens connect slices with props.** A component that needs something from another slice takes it as a prop: a value, such as the current user's id, or a render function, such as `renderAuthor`. A component that provides a value to other slices hands it to a function child. The screen fills both:
+
+  ```tsx
+  // NotesList knows only the author's id. The users slice shows the name.
+  <CurrentUser>{(user) => <NewNoteForm authorId={user?.id} />}</CurrentUser>
+  <NotesList renderAuthor={(authorId) => <UserName userId={authorId} />} />
+  ```
+
+- **Links stay within the slice.** A slice's UI may link to its own slice's pages. A link to another slice's page is a prop that the screen fills.
+- **One linter configuration at the root.** It covers every app. The assertion rule names each app's paths and excludes each domain, and the build output and the generated API client are ignored. An app with React adds the linter's React rules. With oxlint:
+
+  ```jsonc
+  "plugins": ["eslint", "typescript", "oxc", "react"],
+  "ignorePatterns": [".check/**", "**/dist/**", "apps/web/src/adapters/api/schema.ts"],
+  "overrides": [{
+    "files": ["apps/*/src/**/*.{ts,tsx}", "packages/*/src/**/*.ts"],
+    "excludeFiles": ["packages/domain/**", "apps/*/src/domain/**", "apps/*/src/testsupport/**", "**/*.test.{ts,tsx}", "**/*.testing.{ts,tsx}"],
+    "rules": { "typescript/consistent-type-assertions": ["error", { "assertionStyle": "never" }] }
+  }]
+  ```
+
+- **The client generator gets its own package when it needs TypeScript 6,** as openapi-typescript does. A package such as `packages/api-types` depends on the generator and on TypeScript 6, and writes the client into the app's `adapters/api/`.
 - **The contract lives with the API.** A composition file, such as `openapi.ts`, prints the OpenAPI document from the routes, and the API commits it as `openapi.json`. The web app generates its client types from it into `adapters/api/`. `./check` regenerates both and fails when either differs from the committed file.
 - **The API adapter of a client** implements the client's port with the generated client and parses every response with the shared parse functions. Its tests answer requests with recorded responses in the contract's shape.
 - **Tests of UI components** render them with real use cases on a stubbed port, inside the providers they need. A helper that sets this up is a `*.testing.tsx` file in the slice's UI, so production code cannot import it.

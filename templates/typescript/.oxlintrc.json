@@ -1,0 +1,71 @@
+// The linter's rules. oxlint runs them, and oxlint-tsgolint, which is built on
+// TypeScript 7, gives the type-aware rules their type information. This is a
+// gate file: change it on purpose, with the owner's approval.
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["eslint", "typescript", "oxc"],
+  "categories": { "correctness": "error" },
+  "options": { "typeAware": true, "denyWarnings": true, "reportUnusedDisableDirectives": "error" },
+  "ignorePatterns": [".check/**"],
+  "rules": {
+    // Beyond the correctness category, the rules of ESLint's and typescript-eslint's recommended sets.
+    "no-array-constructor": "error",
+    "no-case-declarations": "error",
+    "no-empty": "error",
+    "no-fallthrough": "error",
+    "no-prototype-builtins": "error",
+    "no-regex-spaces": "error",
+    "no-unexpected-multiline": "error",
+    "no-var": "error",
+    "prefer-const": "error",
+    "prefer-rest-params": "error",
+    "prefer-spread": "error",
+    "preserve-caught-error": "error",
+    "typescript/ban-ts-comment": "error",
+    "typescript/no-empty-object-type": "error",
+    "typescript/no-explicit-any": "error",
+    "typescript/no-namespace": "error",
+    "typescript/no-require-imports": "error",
+    "typescript/no-unnecessary-type-constraint": "error",
+    "typescript/no-unsafe-function-type": "error",
+
+    // Type-aware rules, as in typescript-eslint's recommendedTypeChecked. The no-unsafe
+    // rules stop an `any` value, such as the result of JSON.parse, from flowing into a
+    // typed value: parse outside data with a parse function instead.
+    "typescript/await-thenable": "error",
+    "typescript/no-array-delete": "error",
+    "typescript/no-base-to-string": "error",
+    "typescript/no-duplicate-type-constituents": "error",
+    // node:test's test() returns a promise that the runner awaits.
+    "typescript/no-floating-promises": ["error", { "allowForKnownSafeCalls": [{ "from": "package", "package": "node:test", "name": ["test", "it", "describe", "suite"] }] }],
+    "typescript/no-for-in-array": "error",
+    "typescript/no-implied-eval": "error",
+    "typescript/no-misused-promises": "error",
+    "typescript/no-redundant-type-constituents": "error",
+    "typescript/no-unnecessary-type-assertion": "error",
+    "typescript/no-unsafe-argument": "error",
+    "typescript/no-unsafe-assignment": "error",
+    "typescript/no-unsafe-call": "error",
+    "typescript/no-unsafe-enum-comparison": "error",
+    "typescript/no-unsafe-member-access": "error",
+    "typescript/no-unsafe-return": "error",
+    "typescript/no-unsafe-unary-minus": "error",
+    "typescript/only-throw-error": "error",
+    "typescript/prefer-promise-reject-errors": "error",
+    "typescript/require-await": "error",
+    "typescript/restrict-plus-operands": "error",
+    "typescript/restrict-template-expressions": "error",
+    "typescript/unbound-method": "error"
+  },
+  "overrides": [
+    {
+      // A type assertion can create a branded value, such as a NoteTitle, without the
+      // check in its parse function. Only the domain may assert, in that parse function.
+      // Tests and test support may assert too, for example on parsed response JSON.
+      // `as const` is not a type assertion, so it stays allowed everywhere.
+      "files": ["src/**/*.ts"],
+      "excludeFiles": ["src/domain/**", "src/testsupport/**", "**/*.test.ts", "**/*.testing.ts"],
+      "rules": { "typescript/consistent-type-assertions": ["error", { "assertionStyle": "never" }] }
+    }
+  ]
+}

@@ -8,10 +8,10 @@ import { createApp } from './container.ts';
 // Composition tests check the wiring in createApp: which middleware each slice
 // receives. Unit tests of a slice build their use cases directly and never see the wiring.
 test('the notes slice stores through the logging middleware', async () => {
-  const save = mock.fn<NoteStore['save']>(async () => {});
+  const save = mock.fn<NoteStore['save']>(() => Promise.resolve());
   const logger = new RecordingLogger();
   const app = createApp({
-    noteStore: { allNotes: async () => [], save },
+    noteStore: { allNotes: () => Promise.resolve([]), save },
     clock: new FakeClock(),
     ids: new SequentialIds(),
     logger,
