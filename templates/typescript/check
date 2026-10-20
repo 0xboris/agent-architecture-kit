@@ -17,10 +17,15 @@ step() {
   fi
 }
 
-[ -d node_modules ] || npm install --no-audit --no-fund > .check/install.log 2>&1
+# Install the dependencies when they are missing. Without them every later step fails, so stop here.
+if [ ! -d node_modules ]; then
+  step install npm install --no-audit --no-fund
+  [ "$status" -eq 0 ] || exit 1
+fi
 
 step architecture python3 tools/archcheck.py
 step module-map python3 tools/archcheck.py --module-map docs/architecture/modules.md
+step lint npx oxlint
 step typecheck npx tsc --noEmit
 step test node --test --test-reporter=dot "src/**/*.test.ts"
 

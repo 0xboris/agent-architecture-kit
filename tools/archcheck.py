@@ -22,7 +22,12 @@ import sys
 from collections import defaultdict
 
 SKIP_DIRS = {".git", ".build", ".swiftpm", "build", "DerivedData", "node_modules", "dist", "vendor", ".idea", ".vscode"}
-DEFAULT_EXTENSIONS = {"swift": [".swift"], "go": [".go"], "typescript": [".ts", ".tsx", ".mts", ".cts"]}
+DEFAULT_EXTENSIONS = {
+    "swift": [".swift"],
+    "go": [".go"],
+    # JavaScript files are scanned too, so code cannot escape the rules by being plain JavaScript.
+    "typescript": [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"],
+}
 CONTROL_FLOW = {
     "swift": ["if", "guard", "switch", "for", "while", "repeat", "catch"],
     "go": ["if", "for", "switch", "select", "goto"],
@@ -65,6 +70,30 @@ def glob_to_regex(pattern):
             out.append(re.escape(pattern[i]))
             i += 1
     return re.compile("^" + "".join(out) + "$")
+
+
+IDENTIFIER = re.compile(r"[A-Za-z_$][A-Za-z0-9_$]*")
+WORD_PART = re.compile(r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|[0-9]+")
+
+
+def word_parts(text):
+    """Splits 'apiKeyStore', 'APIKeyStore', and 'api_key_store' into ['api', 'key', 'store']."""
+    return [part.lower() for part in WORD_PART.findall(text)]
+
+
+def term_lines(clean, term):
+    """Line numbers where an identifier contains the term's words in a row."""
+    wanted = word_parts(term)
+    *head, last = wanted
+    endings = {last, last + "s", last + "es"}
+    lines = set()
+    for m in IDENTIFIER.finditer(clean):
+        parts = word_parts(m.group(0))
+        for i in range(len(parts) - len(wanted) + 1):
+            if parts[i:i + len(head)] == head and parts[i + len(head)] in endings:
+                lines.add(line_of(clean, m.start()))
+                break
+    return sorted(lines)
 
 
 def matches_any(path, patterns):
@@ -136,8 +165,8 @@ def line_of(code, index):
 # ------------------------------------------------------------------ project
 
 class Module:
-    def __init__(self, name, kind, path, slice_name):
-        self.name, self.kind, self.path, self.slice = name, kind, path, slice_name
+    def __init__(self, name, kind, path, slice_name, app=None):
+        self.name, self.kind, self.path, self.slice, self.app = name, kind, path, slice_name, app
         self.files = []
 
     def label(self):
@@ -170,7 +199,8 @@ class Project:
                     raise ConfigError(f"architecture.json: module '{spec['path']}' uses unknown kind '{kind}'")
                 name = self._fill(spec.get("name", path), captures)
                 slice_name = self._fill(spec["slice"], captures) if "slice" in spec else None
-                modules.append(Module(name, kind, path, slice_name))
+                app = self._fill(spec["app"], captures) if "app" in spec else None
+                modules.append(Module(name, kind, path, slice_name, app))
         return modules
 
     @staticmethod
@@ -261,7 +291,7 @@ class Project:
                 if line.startswith("## "):
                     words = re.findall(r"[A-Za-z0-9]+", line[3:])
                     if words:
-                        terms.append("".join(w[:1].upper() + w[1:] for w in words))
+                        terms.append(" ".join(words))
         return terms
 
     # ----------------------------------------------------------- imports
@@ -289,6 +319,17 @@ class Project:
                 found.append((m.group(1), line_of(stripped, m.start(1))))
         return found
 
+    def resolved_path(self, rel, target):
+        """The repository path that a TypeScript import points to, or None for packages."""
+        if self.language != "typescript":
+            return None
+        for alias, replacement in self.config.get("typescript", {}).get("aliases", {}).items():
+            if target.startswith(alias):
+                return os.path.normpath(replacement + target[len(alias):]).replace(os.sep, "/")
+        if target.startswith("."):
+            return os.path.normpath(os.path.join(os.path.dirname(rel), target)).replace(os.sep, "/")
+        return None
+
     def resolve(self, rel, target):
         """Returns ('module', Module) for project imports, ('external', name) otherwise, ('missing', path)."""
         if self.language == "swift":
@@ -310,6 +351,8 @@ class Project:
                 break
         if target.startswith("."):
             resolved = os.path.normpath(os.path.join(os.path.dirname(rel), target)).replace(os.sep, "/")
+            if matches_any(resolved, self.config.get("testFiles", [])):
+                return ("test-file", resolved)
             module = self.module_for_path(resolved)
             return ("module", module) if module else ("missing", resolved)
         return ("external", target)
@@ -336,12 +379,17 @@ SOURCE_FIXES = {
     "shared-ui": "Shared UI depends only on utilities. Pass plain values in instead of domain types.",
     "adapter": "Adapters depend only on the domain and utilities. The composition root connects them to the rest.",
     "test-support": "Test support depends only on the domain and utilities.",
+    "shared-domain": "The shared domain imports nothing, so that every app can use it. Keep only model types, "
+                     "parse functions, and pure rules there.",
+    "screen": "A screen only arranges the public UI of slices. Let the slice's UI call its use cases, "
+              "and import the slice's UI from its public entry.",
 }
 TARGET_FIXES = {
     "adapter": "Depend on a port declared in the domain. The composition root passes the adapter in.",
     "composition": "Nothing imports the composition root. Receive what you need through your constructor.",
     "test-support": "Only test code imports test support.",
-    "ui": "Slices never depend on each other. Move shared types and rules into the domain.",
+    "ui": "Slices never depend on each other. Move shared types and rules into the domain. When one slice's UI "
+          "shows something from another slice, take it as a parameter or a slot, and let a screen fill it.",
     "usecases": "Use cases are never shared between slices. Write the use case in this slice, "
                 "and move shared rules into the domain.",
 }
@@ -350,6 +398,9 @@ TARGET_FIXES = {
 def import_fix(source, target):
     if target.kind in ("composition", "test-support"):
         return TARGET_FIXES[target.kind]
+    # Kinds may have project names, such as web-ui, so a slice is recognized by its slice, not its kind name.
+    if source.slice is not None and target.slice is not None and source.slice != target.slice:
+        return TARGET_FIXES["usecases"] if "usecases" in target.kind else TARGET_FIXES["ui"]
     return SOURCE_FIXES.get(source.kind) or TARGET_FIXES.get(target.kind) or f"See the dependency rule in {DOCS}."
 
 
@@ -370,19 +421,34 @@ def import_allowed(project, source, target):
             if target.kind != "test-support":
                 return True
         elif entry.endswith("@same-slice"):
-            if target.kind == entry.split("@")[0] and target.slice is not None and target.slice == source.slice:
+            if (target.kind == entry.split("@")[0] and target.slice is not None
+                    and target.slice == source.slice and target.app == source.app):
                 return True
         elif entry == target.kind:
             return True
     return False
 
 
+def is_set_reference(entry):
+    """'@name' refers to a named set. '@scope/package' is a scoped npm package, not a set."""
+    return isinstance(entry, str) and entry.startswith("@") and "/" not in entry
+
+
+def lookup_set(project, section, entry):
+    sets = project.config.get(section, {})
+    if entry[1:] not in sets:
+        raise ConfigError(
+            f"architecture.json: '{entry}' refers to no set in '{section}'. "
+            f"Define it there, or write a scoped package with its scope and name, such as '@scope/package'.")
+    return sets[entry[1:]]
+
+
 def expand_sets(project, patterns):
     """Replaces '@name' entries with the patterns listed under externalSets.name."""
     expanded = []
     for pattern in patterns:
-        if pattern.startswith("@"):
-            expanded.extend(project.config.get("externalSets", {}).get(pattern[1:], []))
+        if is_set_reference(pattern):
+            expanded.extend(lookup_set(project, "externalSets", pattern))
         else:
             expanded.append(pattern)
     return expanded
@@ -403,21 +469,19 @@ def check(project):
     violations = []
     terms = project.glossary_terms()
     graph = defaultdict(set)
-    call_sets = project.config.get("forbiddenCallSets", {})
 
     for rel in project.unmapped:
         violations.append(Violation(
             "unmapped", f"unmapped:{rel}", rel, None,
             "This file belongs to no module in architecture.json.",
-            "Move it into an existing module, or create a slice with `python3 tools/new.py slice <Name>`."))
+            "Move it into an existing module, or create a new slice in the shape of the reference slice that AGENTS.md names."))
 
     for module in project.modules:
         kind_config = project.kinds[module.kind]
         calls = []
         for entry in kind_config.get("forbiddenCalls", []):
-            calls.extend(call_sets.get(entry[1:], []) if isinstance(entry, str) and entry.startswith("@") else [entry])
+            calls.extend(lookup_set(project, "forbiddenCallSets", entry) if is_set_reference(entry) else [entry])
         banned_terms = terms if kind_config.get("bannedTerms") == "glossary" else kind_config.get("bannedTerms", [])
-        term_regexes = [(t, re.compile(re.escape(t) + "|\\b" + re.escape(t[:1].lower() + t[1:]))) for t in banned_terms]
         composition = kind_config.get("composition")
         total_lines = 0
 
@@ -431,11 +495,39 @@ def check(project):
                 if kind_of == "module":
                     if value is not module:
                         graph[module.name].add(value.name)
+                    if value.app is not None and module.app is not None and value.app != module.app:
+                        violations.append(Violation(
+                            "app", f"app:{module.name}->{value.name}", rel, line,
+                            f"{module.label()} in app '{module.app}' imports {value.label()} in app '{value.app}'.",
+                            "Apps never import each other. Share rules through a module without an app, "
+                            "such as the shared domain, and exchange data through the API."))
+                        continue
+                    entries = project.kinds[value.kind].get("publicEntry", [])
+                    if entries and value is not module:
+                        path = project.resolved_path(rel, target)
+                        public = {value.path} | {f"{value.path}/{e}" for e in entries} \
+                            | {f"{value.path}/{os.path.splitext(e)[0]}" for e in entries}
+                        if path is not None and path not in public:
+                            violations.append(Violation(
+                                "public-entry", f"public-entry:{rel}->{path}", rel, line,
+                                f"{module.label()} imports '{path}', which is inside {value.label()}.",
+                                f"Import from the module's public entry, {value.path}/{entries[0]}, "
+                                f"and export what other modules need from there."))
                     if not import_allowed(project, module, value):
                         violations.append(Violation(
                             "import", f"import:{module.name}->{value.name}", rel, line,
                             f"{module.label()} imports {value.label()}. A {module.kind} module may import {describe_allowed(kind_config)}.",
                             import_fix(module, value)))
+                elif kind_of == "missing":
+                    violations.append(Violation(
+                        "unresolved", f"unresolved:{rel}->{value}", rel, line,
+                        f"{module.label()} imports '{value}', which belongs to no module in architecture.json.",
+                        "Import code from a mapped module. Configuration and ignored files are not imported by modules."))
+                elif kind_of == "test-file":
+                    violations.append(Violation(
+                        "test-import", f"test-import:{rel}->{value}", rel, line,
+                        f"{module.label()} imports the test file '{value}'.",
+                        "Production code never imports test code. Move what both need into the module itself."))
                 elif kind_of == "external":
                     if not external_allowed(project, kind_config, value):
                         violations.append(Violation(
@@ -450,8 +542,8 @@ def check(project):
                         "call", f"call:{module.name}:{call['pattern']}", rel, line_of(clean, m.start()),
                         f"{module.label()} uses `{m.group(0).strip()}`.", call.get("fix", "")))
 
-            for term, regex in term_regexes:
-                for number in sorted({line_of(clean, m.start()) for m in regex.finditer(clean)}):
+            for term in banned_terms:
+                for number in term_lines(clean, term):
                     violations.append(Violation(
                         "term", f"term:{module.name}:{term}", rel, number,
                         f"{module.label()} has no business meaning, but uses the glossary term '{term}'.",
@@ -463,7 +555,7 @@ def check(project):
                     violations.append(Violation(
                         "composition", f"composition-file:{rel}", rel, None,
                         f"{module.label()} holds wiring only, in the files that architecture.json lists.",
-                        "Put feature code into a slice: `python3 tools/new.py slice <Name>`."))
+                        "Put feature code into a slice, in the shape of the reference slice that AGENTS.md names."))
                 if not matches_any(inner, composition.get("controlFlowAllowedIn", [])):
                     allowed_lines = [re.compile(p) for p in composition.get("controlFlowAllowedPatterns", [])]
                     keywords = "|".join(CONTROL_FLOW[project.language])
@@ -536,7 +628,7 @@ def module_map(project):
         lines.append(f"May import: {allowed}.")
         lines.append("")
         for m in sorted(members, key=lambda m: m.name):
-            slice_note = f", slice {m.slice}" if m.slice else ""
+            slice_note = (f", app {m.app}" if m.app else "") + (f", slice {m.slice}" if m.slice else "")
             lines.append(f"- `{m.name}`{slice_note}: `{m.path}`")
         lines.append("")
     return "\n".join(lines)
@@ -562,7 +654,11 @@ def main():
             f.write(module_map(project) + "\n")
         return 0
 
-    violations = check(project)
+    try:
+        violations = check(project)
+    except ConfigError as error:
+        print(f"Architecture check: {error}", file=sys.stderr)
+        return 2
     counts = defaultdict(int)
     for v in violations:
         counts[v.key] += 1

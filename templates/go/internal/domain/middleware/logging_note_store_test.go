@@ -7,12 +7,13 @@ import (
 	"testing"
 	"time"
 
+	"__GO_MODULE__/internal/domain"
 	"__GO_MODULE__/internal/domain/middleware"
 	"__GO_MODULE__/internal/testsupport"
 )
 
-func TestSaveThroughTheMiddlewareLogsAndStores(t *testing.T) {
-	store := testsupport.NewFakeNoteStore()
+func TestSaveThroughTheMiddlewareSavesAndLogs(t *testing.T) {
+	store := &testsupport.StubNoteStore{}
 	logger := &testsupport.RecordingLogger{}
 	note := testsupport.SampleNote(1, time.Unix(0, 0))
 
@@ -20,8 +21,8 @@ func TestSaveThroughTheMiddlewareLogsAndStores(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if notes, _ := store.AllNotes(context.Background()); len(notes) != 1 {
-		t.Fatalf("stored notes = %v; want one", notes)
+	if saved := store.Saved(); !slices.Equal(saved, []domain.Note{note}) {
+		t.Fatalf("saved %v; want [%v]", saved, note)
 	}
 	if got := logger.Messages(); !slices.Equal(got, []string{"note saved"}) {
 		t.Fatalf("logged %v", got)
@@ -29,9 +30,8 @@ func TestSaveThroughTheMiddlewareLogsAndStores(t *testing.T) {
 }
 
 func TestFailedSaveIsNotLogged(t *testing.T) {
-	store := testsupport.NewFakeNoteStore()
 	offline := errors.New("offline")
-	store.FailNextCall(offline)
+	store := &testsupport.StubNoteStore{Err: offline}
 	logger := &testsupport.RecordingLogger{}
 
 	err := middleware.NewLoggingNoteStore(store, logger).Save(context.Background(), testsupport.SampleNote(1, time.Unix(0, 0)))

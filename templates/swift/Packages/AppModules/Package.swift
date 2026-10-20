@@ -4,8 +4,8 @@ import PackageDescription
 // Every module of the app lives in this package. The Xcode app target only holds
 // the @main file and links the AppComposition product.
 //
-// `python3 tools/new.py slice <Name>` adds targets at the `scaffold:` markers.
-// tools/archcheck.py enforces the import rules; this manifest only declares
+// Each slice adds a UI target, a use case target, their test targets, and the
+// composition dependencies, like Notes. tools/archcheck.py enforces the import rules; this manifest only declares
 // build dependencies. Declare every target that a file imports, so that
 // `swift build --explicit-target-dependency-import-check=error` passes.
 let package = Package(
@@ -35,11 +35,9 @@ let package = Package(
         .target(name: "NotesUI", dependencies: ["NotesUseCases", "Domain", "DesignSystem", "Utilities"], path: "Sources/Features/Notes/UI"),
         .testTarget(name: "NotesUseCasesTests", dependencies: ["NotesUseCases", "Domain", "TestSupport"], path: "Tests/NotesUseCasesTests"),
         .testTarget(name: "NotesUITests", dependencies: ["NotesUI", "NotesUseCases", "Domain", "TestSupport"], path: "Tests/NotesUITests"),
-        // scaffold:slices
 
-        // Test support: shared fakes and contract suites. Only test targets depend on it.
+        // Test support: stubs, small fakes, and sample data. Only test targets depend on it.
         .target(name: "TestSupport", dependencies: ["Domain", "Utilities"], path: "Sources/TestSupport"),
-        .testTarget(name: "TestSupportTests", dependencies: ["TestSupport", "Domain"], path: "Tests/TestSupportTests"),
 
         // Composition root.
         .target(
@@ -47,7 +45,6 @@ let package = Package(
             dependencies: [
                 "Domain", "Utilities", "DesignSystem", "Persistence", "Platform",
                 "NotesUI", "NotesUseCases",
-                // scaffold:composition
             ],
             path: "Sources/AppComposition"
         ),

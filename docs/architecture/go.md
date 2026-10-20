@@ -1,6 +1,8 @@
 # The architecture in Go
 
-This guide shows how each part of `docs/ARCHITECTURE.md` looks in this Go project. The notes slice is the working example for every section.
+This guide shows how each part of `docs/ARCHITECTURE.md` looks in Go. It holds the rules that come from the language. `docs/architecture/stack.md` names the libraries this project uses, such as the HTTP router and the logger, and how the reference slice uses them.
+
+This guide belongs to the kit, and a kit upgrade replaces it, so the project does not edit it. Its examples name the kit's Notes slice. Once Notes is gone, the reference slice that `AGENTS.md` names shows the same patterns.
 
 ## Layout
 
@@ -9,21 +11,21 @@ cmd/server/main.go                    composition root: entry point
 internal/app/                         composition root: app.go, config.go, live.go, wire_<slice>.go
 internal/domain/                      domain: model, rules, ports
 internal/domain/middleware/           domain: middleware
-internal/features/<slice>/ui/         UI of a slice (HTTP handlers)
+internal/features/<slice>/ui/         UI of a slice
 internal/features/<slice>/usecases/   use cases of a slice
-internal/sharedui/                    shared UI, such as httpjson
+internal/sharedui/                    shared UI
 internal/adapters/<name>/             one directory per adapter
 internal/utilities/
 internal/testsupport/
 ```
 
-A module is a directory and every package below it. `internal/domain/middleware` belongs to the domain module. Slice directories use lowercase names without separators, such as `recurringtransactions`. `python3 tools/new.py slice <Name>` creates the directories, their tests, and the wiring file, and adds the wiring call to `internal/app/app.go`.
+A module is a directory and every package below it. `internal/domain/middleware` belongs to the domain module. Slice directories use lowercase names without separators, such as `recurringtransactions`. A new slice copies the files of the reference slice: its `ui` and `usecases` packages, their tests, and `internal/app/wire_<slice>.go`, which `New` in `internal/app/app.go` calls.
 
 ## Domain
 
 - **Model.** Structs and named types. A value with rules has unexported fields and a constructor that returns an error, like `NewNoteTitle`. Treat its zero value as invalid.
 - **Rules.** Plain functions, like `NewestFirst`.
-- **Errors.** Exported sentinel errors or error types, like `ErrTitleEmpty`. Callers check them with `errors.Is` or `errors.As`, and code wraps underlying errors with `fmt.Errorf("...: %w", err)`.
+- **Errors.** Exported sentinel errors or error types, like `ErrTitleEmpty`. Callers check them with `errors.Is` or `errors.As`, and code wraps underlying errors with `fmt.Errorf("...: %w", err)`. A port documents the errors it returns, so callers and their tests can handle each one.
 - **Ports.** Interfaces in `ports.go` or in a file per port. Methods that may do I/O take a `context.Context` first.
 - **Middleware.** A struct in `domain/middleware` that wraps a port and implements it, like `LoggingNoteStore`.
 
@@ -31,32 +33,40 @@ The domain may import the standard library except the I/O packages that `archite
 
 ## Slices
 
-- **Use cases** are structs with unexported port fields, a `NewX` constructor, and a `Run(ctx, ...)` method.
-- **Handlers** live in the slice's `ui` package. A `Handler` takes its use cases and a logger in `NewHandler` and registers its routes in `Register(mux)`. Request and response types stay in the handler file and map to and from domain types.
-- A handler logs the errors it handles and maps domain errors to status codes with `errors.Is`.
-- Use `sharedui/httpjson` to read and write JSON. Reading ignores unknown fields, so newer clients can send fields that this version does not know yet.
+- **Use cases** are structs with unexported port fields, a `NewX` constructor, and a `Run(ctx, ...)` method. Settings are plain values, such as a retention period, that `config.go` reads and the wiring file passes to the constructor.
+- **The UI package** takes the slice's use cases and a logger in its constructor. Request and response types stay in the UI package and map to and from domain types.
+- The UI package logs the errors it handles and maps domain errors to output with `errors.Is`.
 
-UI code may not make outgoing HTTP requests or touch the file system. Put that behind a port.
+UI code may not make outgoing requests or touch the file system. Put that behind a port.
+
+## Other entry points
+
+- A background job or a scheduled task is an entry point of its slice, like a handler. Its code lives in the slice's UI package and calls the slice's use cases.
+- The queue or scheduler that runs jobs is an adapter. The composition root registers each slice's jobs with it and sets their schedules from configuration.
+- A use case that puts work on a queue does so through a port, which the queue adapter implements.
+- When the service runs as more than one process, such as an API and a worker, each process gets its own directory under `cmd/`, such as `cmd/server` and `cmd/worker`.
+- When an adapter holds a resource that must be closed, such as a database pool, `live.go` returns it with the dependencies, and `main.go` closes it on shutdown. Migrations run before the process serves, at start or from their own command under `cmd/`.
 
 ## Adapters
 
-An adapter package imports the domain and whatever libraries it needs. It keeps its stored or wire records unexported and maps them to domain types. Guard mutable state with a `sync.Mutex`. The `filestore` adapter shows atomic writes: it writes a temporary file and then renames it.
+An adapter package imports the domain and whatever libraries it needs. It keeps its stored or wire records unexported and maps them to domain types. Guard mutable state with a `sync.Mutex`.
 
-For SQL databases, keep numbered migrations in the adapter, and never edit a migration that has shipped.
+For SQL databases, keep numbered migrations in the adapter, and never edit a migration that has shipped. A helper that creates a real database for tests lives in the adapter package, next to the adapter's tests, because test support may not import adapters.
 
 ## Composition root
 
 - `app.go` defines `Dependencies` and `New`. `New` applies the mandatory middleware and calls one `wireX` method per slice.
-- `wire_<slice>.go` builds the slice's use cases and handler, and decides which optional middleware the slice gets.
+- `wire_<slice>.go` builds the slice's use cases and UI, and decides which optional middleware the slice gets.
 - `live.go` creates the real adapters, and `config.go` reads the environment.
-- `cmd/server/main.go` reads the config, builds the app, and starts the server.
+- `cmd/server/main.go` reads the config, builds the app, and starts it.
 - Control flow is allowed in `config.go`. Elsewhere only `if err != nil {` and `if err := ...; err != nil {` are allowed, for error handling.
 
-## Test support and tests
+## Tests
 
 - Tests use the standard `testing` package. Domain and middleware tests that need test support live in external test packages, such as `domain_test`, to avoid an import cycle.
-- Fakes guard their state with a mutex and can inject a failure, like `FakeNoteStore.FailNextCall`. Like the real store, the fake returns notes in no particular order, so tests must not depend on map order.
-- A contract is a function that takes `*testing.T` and a constructor, like `NoteStoreContract`. `fakes_test.go` runs it against the fake, and the adapter's test runs it against the real implementation, with `t.TempDir()` for files.
-- `internal/app/app_test.go` is the composition test. It builds the app with fakes and calls it through `httptest`.
+- A stub is a struct in test support with exported fields for the results a test sets, like `StubNoteStore`. It records what it receives, guards that record with a mutex, and asserts at compile time that it implements the port: `var _ domain.NoteStore = (*StubNoteStore)(nil)`.
+- Test support also holds sample data, like `SampleNote`, and small fakes for ports whose state a test drives, like `FakeClock`.
+- The adapter's own tests run against the real system, such as a real database or `t.TempDir()`.
+- `internal/app/app_test.go` is the composition test. It builds the app with stubs and checks which middleware the slices receive.
 
-`./check` runs `gofmt`, `go vet`, and `go test -race -shuffle=on`, so tests must pass in any order and without data races.
+Tests must pass in any order and without data races.

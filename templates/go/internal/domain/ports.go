@@ -5,8 +5,7 @@ import (
 	"time"
 )
 
-// NoteStore stores notes between runs. The filestore adapter implements it,
-// testsupport fakes it, and testsupport.NoteStoreContract checks both.
+// NoteStore stores notes between runs. The filestore adapter implements it.
 type NoteStore interface {
 	AllNotes(ctx context.Context) ([]Note, error)
 	Save(ctx context.Context, note Note) error
