@@ -116,6 +116,43 @@ TypeScript projects created before 2026-10-19 have no linter. To add it:
 4. Run `npx oxlint` and fix what it reports. Most findings in tests are stubs written as `async` functions without `await`, and JSON responses read as `any`.
 5. Describe the linter in `docs/architecture/stack.md`, as the template's copy does.
 
+## Workflow plugins such as pstack
+
+A workflow plugin decides how an agent works: which steps it takes, which subagents it spawns, and how it reviews and lands its pull requests. [pstack](https://github.com/cursor/plugins/tree/main/pstack) is one. The kit decides where code goes and fails the check when code goes elsewhere. The two work together, with the kit's rules on top.
+
+To enable pstack for everyone who works on a project, add this to `.claude/settings.json`. It is a gate file, so commit the change yourself.
+
+```json
+"extraKnownMarketplaces": {
+  "cursor-plugins": {"source": {"source": "github", "repo": "cursor/plugins"}}
+},
+"enabledPlugins": {"pstack@cursor-plugins": true}
+```
+
+Claude Code registers the marketplace after a contributor accepts the workspace trust dialog. Cloud sessions show no such dialog, so install the plugin there with `/plugin install pstack@cursor-plugins`. Then type `/pstack:poteto-mode` before a task.
+
+The architecture holds in a pstack session for these reasons:
+
+- **The check and the gates.** The Stop hook runs `./check` in the checkout or git worktree the session works in. Branch protection and `CODEOWNERS` hold every change to a gate file for your review. pstack's autonomous playbooks merge pull requests on their own but never bypass an approval that GitHub enforces, so an overnight run stops at a pull request that touches a gate file. This works only when agents open pull requests under their own account, as described under "Start a new project".
+- **The precedence section.** The "Skills and plugins" section in `AGENTS.md` says that the project's rules win, and how. Claude Code loads it in every session and in pstack's subagents. It is an instruction, so it steers the agent and enforces nothing.
+- **The reviewer.** The `architecture-reviewer` subagent runs before each pull request, next to pstack's own reviews. It also checks for layers that were collapsed.
+
+Where pstack's advice differs from the architecture, the project does this:
+
+| pstack | In a kit project |
+| --- | --- |
+| `architect` compares whole-shape designs. | Designs differ in domain types, rules, ports, and results. The module kinds and the slice layout stay. A new kind is your decision. |
+| Collapse one-caller wrappers and pass-through methods. | Use cases, ports, and middleware stay, even when thin. |
+| Mock only what you can't run locally. | Use case and UI tests stub the ports. Adapter tests use the real system. |
+| A brand comes from a type guard, never from `as`. | A value with rules comes from its parse function in the domain, which is the one place `as` is allowed in TypeScript. |
+| Delete compatibility code in the same change. | That holds for internal APIs. Stored formats and wire contracts change only by adding. |
+| Fix broken tools and flaky verifiers yourself. | A failing `./check` is a finding in the code. Changes to the check go to you. |
+| `correct`, `reflect`, and `create-verification-skill` write rules, checks, and skills. | These are gate-file changes, each in its own pull request for you. A new check goes into `architecture.json` or the linter configuration. Accepted violations go into the baseline, not into comments on the line. |
+
+The Stop hook runs only when the main session finishes. pstack's subagents run `./check` because `AGENTS.md` tells them to, and the main session's Stop hook checks their combined work. If the main session ends a turn while subagents still edit files, the hook can report failures in their unfinished work.
+
+Projects created before 2026-10-20 get this by copying `tools/agent-stop-check.sh` from the kit, the "Skills and plugins" section of `templates/common/AGENTS.md` into the project's `AGENTS.md`, and question 13 of `templates/common/.claude/agents/architecture-reviewer.md` into the project's reviewer.
+
 ## Frameworks
 
 The architecture names no framework. The domain and use cases import none, so a framework can only sit in UI, adapters, the composition root, and tests. Each project allows its frameworks per kind in `architecture.json`, describes them in `docs/architecture/stack.md`, and shows how to use them in the reference slice. The templates use only each language's standard library. To switch to other libraries, follow "Changing a library" in `docs/architecture/stack.md`.
@@ -198,6 +235,12 @@ Retested on Linux on 2026-10-19 with Node 24.22, TypeScript 7.0.2, oxlint 1.88.0
 
 - **Lint.** `init typescript` creates a project whose `./check` passes, including the new lint step. Lint fails on `'x' as NoteTitle` in a slice's UI, passes it in the domain, fails on `JSON.parse` assigned to a typed value, and allows `as const`.
 - **Adoption.** `adopt typescript` adds `.oxlintrc.json` and keeps an existing one.
+
+Retested on Linux on 2026-10-20, after the Stop hook learned to check git worktrees:
+
+- **Stop hook.** I ran the script directly with hook input. With `cwd` in a git worktree of the project, it runs `./check` there and blocks on a failing change that the main checkout does not have. Before this change, it passed. With `cwd` in another repository, outside any repository, or missing, it checks the main checkout as before.
+
+pstack itself has not been tried in a kit project.
 - **Several apps.** The test project with an API, a React web app, and a shared domain moved from TypeScript 6 and ESLint to TypeScript 7 and oxlint, and `./check` passes: the contract, lint, type checks of every package, Vitest, and the Vite build. Lint fails on an assertion in a slice's `.tsx` file and on a list item without a key, and allows assertions in the shared domain and in tests. openapi-typescript, which needs TypeScript's JavaScript API, runs with TypeScript 5.9 from a package of its own and generates the same client. The hooks rule runs only on the React app, because the API's `useCases()` wiring helper is not a hook.
 - **A fresh agent.** Given only the kit and the stack, a new agent built an API, a web app, and a shared domain with notes and users. It arrived at the same design, with an author slot that a screen fills and the edit rule in the shared domain, and `./check` passed. The gaps it reported are fixed: the steps from one app to several, an `architecture.json` for several apps, the React hooks rule, the shared domain's tests, `openapi.ts` in `allowedFiles`, and the fix message for an import between slices whose kinds have project names, such as `web-ui`.
 
