@@ -534,7 +534,10 @@ def check(project):
                             "external", f"external:{module.name}->{value}", rel, line,
                             f"{module.label()} imports '{value}', which its kind does not allow.",
                             "Put code that needs this framework or library into an adapter behind a port, "
-                            "or into the layer that architecture.json allows it in."))
+                            "or into the layer that architecture.json allows it in. A pure library that does "
+                            "no I/O, such as a validation or decimal library, may instead be added to "
+                            f"external.allow of the '{module.kind}' kind. architecture.json is a gate file, "
+                            "so that change needs the owner's review."))
 
             for call in calls:
                 for m in re.finditer(call["pattern"], clean):

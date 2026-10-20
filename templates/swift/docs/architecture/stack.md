@@ -34,7 +34,7 @@ The Platform adapter implements `AppLogger` with `os.Logger`. Test support guard
 
 ## Changing a framework
 
-1. Allow the new framework for the kinds that use it in `architecture.json`, under `external.allow`. Frameworks belong in UI, adapters, and the composition root, never in the domain or use cases.
+1. Allow the new framework for the kinds that use it in `architecture.json`, under `external.allow`. Frameworks belong in UI, adapters, and the composition root, never in the domain or use cases. A pure package that does no I/O, such as swift-collections, may go in the domain. Other targets then use only the domain's types and parse functions, and the domain maps the package's errors to its own errors. A major upgrade of the package then changes only the domain.
 2. Rewrite the reference slice and its tests with the new framework, so that agents copy the new patterns. Keep what the slice does unchanged: it exists to show patterns, and new behavior belongs in real slices. Wire details that the new library decides, such as its validation errors, may change; note them here.
 3. Update the commands in `./check` and the CI workflow.
 4. Add any new compiler, linter, or test runner settings file to `.github/CODEOWNERS` if it does not match a listed pattern yet.
