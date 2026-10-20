@@ -17,6 +17,7 @@ tools/new.py                      creates projects and adopts existing ones (run
 tools/agent-stop-check.sh         Claude Code Stop hook that runs ./check
 templates/common/                 AGENTS.md, CLAUDE.md, GLOSSARY.md, .claude/, CODEOWNERS
 templates/swift|go|typescript/    a working project with the Notes reference slice and its stack.md
+examples/                         pages that show the architecture in example projects (not copied into projects)
 ```
 
 Each project receives:
