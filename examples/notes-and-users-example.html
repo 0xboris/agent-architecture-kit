@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+  :root { color-scheme: light; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  body { margin: 0; font: 14px system-ui, -apple-system, "Segoe UI", sans-serif; }
+  img { max-width: 100%; }
+  [hidden] { display: none !important; }
+</style>
+<title>Notes and Users Example</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  /* Layout: one wide module map, then the notes screen next to its code, then the edit rule's path, then findings. */
+  :root {
+    --bg: #f6f7f9;
+    --fg: #1d232b;
+    --muted: #5b6573;
+    --line: #c9cfd8;
+    --band: #eceff3;
+    --box: #ffffff;
+    --notes: #1c7a6c;
+    --users: #7a4bb5;
+    --gen: #2f6fb0;
+    --accent: #c4501c;
+    --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14181d; --fg: #e3e7ec; --muted: #9aa4b1; --line: #3a424d;
+      --band: #1b2027; --box: #20262e; --notes: #4fc2ad; --users: #b48ef0;
+      --gen: #6fa8e0; --accent: #f08a55;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14181d; --fg: #e3e7ec; --muted: #9aa4b1; --line: #3a424d;
+    --band: #1b2027; --box: #20262e; --notes: #4fc2ad; --users: #b48ef0;
+    --gen: #6fa8e0; --accent: #f08a55;
+    color-scheme: dark;
+  }
+  body {
+    background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.55;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 28px 48px;
+  }
+  main { max-width: 1180px; margin: 0 auto; display: grid; gap: 36px; }
+  header { display: grid; gap: 6px; }
+  h1 { font-size: 1.6rem; font-weight: 600; margin: 0; text-wrap: balance; }
+  h2 { font-size: 1.1rem; font-weight: 600; margin: 0; text-wrap: balance; }
+  p { margin: 0; max-width: 72ch; }
+  .muted { color: var(--muted); }
+  code, pre { font-family: var(--font-mono); font-size: 0.86em; }
+  section { display: grid; gap: 12px; min-width: 0; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.88rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .sw { width: 18px; height: 12px; border-radius: 3px; border: 2px solid; background: var(--box); }
+  .sw.notes { border-color: var(--notes); }
+  .sw.users { border-color: var(--users); }
+  .sw.shared { border-color: var(--gen); }
+  .sw.join { border-color: var(--accent); }
+  .x { color: var(--accent); font-weight: 600; font-family: var(--font-mono); }
+
+  figure { margin: 0; display: grid; gap: 10px; min-width: 0; }
+  .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--box); padding: 12px; }
+  svg { display: block; width: 100%; height: auto; color: var(--fg); }
+  .wide svg { min-width: 940px; }
+  .mid svg { min-width: 520px; }
+  figcaption { color: var(--muted); font-size: 0.92rem; max-width: 84ch; }
+
+  .band { fill: var(--band); }
+  .bx { fill: var(--box); stroke: var(--fg); stroke-width: 1.2; }
+  .bx-n { fill: var(--box); stroke: var(--notes); stroke-width: 1.8; }
+  .bx-u { fill: var(--box); stroke: var(--users); stroke-width: 1.8; }
+  .bx-g { fill: var(--box); stroke: var(--gen); stroke-width: 2; }
+  .bx-j { fill: var(--box); stroke: var(--accent); stroke-width: 2.2; }
+  .bx-m { fill: none; stroke: var(--line); stroke-width: 1.2; }
+  .t { fill: var(--fg); font-family: var(--font-mono); font-size: 13px; font-weight: 500; }
+  .s { fill: var(--muted); font-family: var(--font-body); font-size: 11.5px; }
+  .hd { fill: var(--fg); font-family: var(--font-mono); font-size: 14px; font-weight: 500; }
+  .rl { fill: var(--muted); font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; }
+  .ln-n { fill: var(--notes); font-family: var(--font-mono); font-size: 12px; font-weight: 500; }
+  .ln-u { fill: var(--users); font-family: var(--font-mono); font-size: 12px; font-weight: 500; }
+  .lb { fill: var(--muted); font-family: var(--font-body); font-size: 11px; }
+  .lb-j { fill: var(--accent); font-family: var(--font-body); font-size: 11.5px; font-weight: 600; }
+  .lb-g { fill: var(--gen); font-family: var(--font-body); font-size: 11.5px; }
+  .imp { stroke: var(--muted); stroke-width: 1.2; fill: none; }
+  .imp-j { stroke: var(--accent); stroke-width: 1.8; fill: none; }
+  .imp-g { stroke: var(--gen); stroke-width: 1.6; fill: none; }
+  .http { stroke: var(--muted); stroke-width: 1.4; fill: none; stroke-dasharray: 5 4; }
+  .no { stroke: var(--accent); stroke-width: 1.6; fill: none; stroke-dasharray: 3 3; }
+  .xm { fill: var(--accent); font-family: var(--font-mono); font-size: 16px; font-weight: 600; }
+  .head { fill: var(--muted); }
+  .head-j { fill: var(--accent); }
+  .head-g { fill: var(--gen); }
+
+  /* screen wireframe */
+  .wf-frame { fill: var(--bg); stroke: var(--line); stroke-width: 1.2; }
+  .wf-bar { fill: var(--band); }
+  .wf-txt { fill: var(--fg); font-family: var(--font-body); font-size: 13px; }
+  .wf-h1 { fill: var(--fg); font-family: var(--font-body); font-size: 20px; font-weight: 600; }
+  .wf-h2 { fill: var(--muted); font-family: var(--font-body); font-size: 12px; font-weight: 600; letter-spacing: 0.04em; }
+  .wf-link { fill: var(--gen); font-family: var(--font-body); font-size: 13px; }
+  .wf-meta { fill: var(--muted); font-family: var(--font-body); font-size: 12px; }
+  .wf-prod { fill: var(--muted); font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.04em; }
+  .wf-in { fill: var(--box); stroke: var(--line); }
+  .wf-n { fill: none; stroke: var(--notes); stroke-width: 2; }
+  .wf-u { fill: none; stroke: var(--users); stroke-width: 2; stroke-dasharray: 5 3; }
+  .wf-tag-n { fill: var(--notes); font-family: var(--font-mono); font-size: 11px; font-weight: 500; }
+  .wf-tag-u { fill: var(--users); font-family: var(--font-mono); font-size: 11px; font-weight: 500; }
+
+  .pair { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  @media (max-width: 860px) { .pair { grid-template-columns: minmax(0, 1fr); } }
+  pre { margin: 0; padding: 14px 16px; background: var(--box); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; line-height: 1.6; }
+  pre .n { color: var(--notes); }
+  pre .u { color: var(--users); }
+  pre .c { color: var(--muted); }
+  .codehead { font-family: var(--font-mono); font-size: 0.82rem; color: var(--muted); margin-bottom: 6px; }
+
+  .cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 32px; }
+  @media (max-width: 760px) { .cols { grid-template-columns: minmax(0, 1fr); } }
+  ul { margin: 0; padding-left: 1.1em; display: grid; gap: 10px; }
+  li { max-width: 70ch; }
+  h3 { font-size: 0.95rem; font-weight: 600; margin: 0 0 8px; }
+
+  .status { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pill { font-family: var(--font-mono); font-size: 0.8rem; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--notes); color: var(--notes); background: var(--box); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Notes and users example</h1>
+    <p class="muted">A users slice is added to both apps. Notes now have an author, and only the author can change a note's title. The two slices never import each other. They meet in five places, marked in orange below.</p>
+    <div class="status" aria-label="Check result">
+      <span class="pill">architecture ok</span><span class="pill">contract ok</span><span class="pill">lint ok</span><span class="pill">typecheck ok</span><span class="pill">164 tests ok</span><span class="pill">build ok</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>The module map with two slices</h2>
+    <div class="legend">
+      <span><i class="sw notes"></i>notes slice</span>
+      <span><i class="sw users"></i>users slice</span>
+      <span><i class="sw shared"></i>shared domain</span>
+      <span><i class="sw join"></i>where the slices meet</span>
+      <span><b class="x">×</b>import between slices, which the check rejects</span>
+    </div>
+    <figure class="wide">
+      <div class="scroll">
+        <svg viewBox="0 0 1160 640" role="img" aria-label="Both apps have a notes lane and a users lane in every layer. The lanes never import each other. They meet in the shared domain, the API's ports, the web screens, the composition roots and the database.">
+          <defs>
+            <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="head"/></marker>
+            <marker id="ahj" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="head-j"/></marker>
+            <marker id="ahg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="head-g"/></marker>
+          </defs>
+
+          <!-- app headers and lane captions -->
+          <text x="20" y="22" class="hd">apps/api</text>
+          <text x="640" y="22" class="hd">apps/web</text>
+          <text x="135" y="44" text-anchor="middle" class="ln-n">notes</text>
+          <text x="405" y="44" text-anchor="middle" class="ln-u">users</text>
+          <text x="755" y="44" text-anchor="middle" class="ln-n">notes</text>
+          <text x="1025" y="44" text-anchor="middle" class="ln-u">users</text>
+
+          <!-- row bands -->
+          <rect x="10" y="52" width="1140" height="66" rx="6" class="band"/>
+          <rect x="10" y="124" width="1140" height="66" rx="6" class="band"/>
+          <rect x="10" y="196" width="1140" height="66" rx="6" class="band"/>
+          <rect x="10" y="268" width="1140" height="78" rx="6" class="band"/>
+          <rect x="10" y="352" width="1140" height="66" rx="6" class="band"/>
+          <rect x="10" y="424" width="1140" height="78" rx="6" class="band"/>
+          <text x="20" y="66" class="rl">COMPOSITION ROOT</text>
+          <text x="20" y="138" class="rl">SCREENS</text>
+          <text x="20" y="210" class="rl">SLICE UI</text>
+          <text x="20" y="282" class="rl">USE CASES</text>
+          <text x="20" y="366" class="rl">APP DOMAIN</text>
+          <text x="20" y="438" class="rl">ADAPTERS</text>
+
+          <!-- composition -->
+          <rect x="20" y="72" width="500" height="42" rx="5" class="bx-j"/>
+          <text x="32" y="88" class="t">src/app/</text>
+          <text x="32" y="104" class="s">container.ts mounts wireNotes and wireUsers · live.ts makes both Postgres stores</text>
+          <rect x="640" y="72" width="500" height="42" rx="5" class="bx-j"/>
+          <text x="652" y="88" class="t">src/app/</text>
+          <text x="652" y="104" class="s">container.tsx nests NotesProvider and UsersProvider · routes.tsx maps 3 routes</text>
+
+          <!-- screens -->
+          <text x="270" y="170" text-anchor="middle" class="lb">no screens: the API's UI is its routes</text>
+          <rect x="640" y="144" width="230" height="42" rx="5" class="bx-j"/>
+          <text x="652" y="160" class="t">screens/notes</text>
+          <text x="652" y="176" class="s">NotesScreen · NoteScreen</text>
+          <rect x="910" y="144" width="230" height="42" rx="5" class="bx-u"/>
+          <text x="922" y="160" class="t">screens/users</text>
+          <text x="922" y="176" class="s">UsersScreen</text>
+
+          <!-- slice ui -->
+          <rect x="20" y="216" width="230" height="42" rx="5" class="bx-n"/>
+          <text x="32" y="232" class="t">notes/ui</text>
+          <text x="32" y="248" class="s">GET, POST /notes · GET, PATCH /notes/{id}</text>
+          <rect x="290" y="216" width="230" height="42" rx="5" class="bx-u"/>
+          <text x="302" y="232" class="t">users/ui</text>
+          <text x="302" y="248" class="s">GET, POST /users</text>
+          <rect x="640" y="216" width="230" height="42" rx="5" class="bx-n"/>
+          <text x="652" y="232" class="t">notes/ui/index.ts</text>
+          <text x="652" y="248" class="s">NotesList · NewNoteForm · NoteDetail</text>
+          <rect x="910" y="216" width="230" height="42" rx="5" class="bx-u"/>
+          <text x="922" y="232" class="t">users/ui/index.ts</text>
+          <text x="922" y="248" class="s">CurrentUser · UserName · UserSwitcher</text>
+
+          <!-- use cases -->
+          <rect x="20" y="288" width="230" height="54" rx="5" class="bx-n"/>
+          <text x="32" y="304" class="t">notes/usecases</text>
+          <text x="32" y="320" class="s">ListNotes · GetNote</text>
+          <text x="32" y="334" class="s">CreateNote · EditNote</text>
+          <rect x="290" y="288" width="230" height="54" rx="5" class="bx-u"/>
+          <text x="302" y="304" class="t">users/usecases</text>
+          <text x="302" y="320" class="s">ListUsers · CreateUser</text>
+          <rect x="640" y="288" width="230" height="54" rx="5" class="bx-n"/>
+          <text x="652" y="304" class="t">notes/usecases</text>
+          <text x="652" y="320" class="s">ListNotes · GetNote</text>
+          <text x="652" y="334" class="s">CreateNote · EditNote</text>
+          <rect x="910" y="288" width="230" height="54" rx="5" class="bx-u"/>
+          <text x="922" y="304" class="t">users/usecases</text>
+          <text x="922" y="320" class="s">ListUsers · CreateUser</text>
+          <text x="922" y="334" class="s">SwitchUser · GetCurrentUser</text>
+
+          <!-- app domain -->
+          <rect x="20" y="372" width="500" height="42" rx="5" class="bx-j"/>
+          <text x="32" y="388" class="t">src/domain/ports.ts</text>
+          <text x="32" y="404" class="s">NoteStore · UserStore · Clock · IdGenerator</text>
+          <rect x="640" y="372" width="500" height="42" rx="5" class="bx"/>
+          <text x="652" y="388" class="t">src/domain/ports.ts</text>
+          <text x="652" y="404" class="s">NotesApi · UsersApi · CurrentUserStore</text>
+
+          <!-- adapters -->
+          <rect x="20" y="444" width="500" height="54" rx="5" class="bx-j"/>
+          <text x="32" y="460" class="t">adapters/postgres</text>
+          <text x="32" y="476" class="s">PostgresNoteStore · PostgresUserStore</text>
+          <text x="32" y="490" class="s">migration 0001: users table, notes.author_id references users.id</text>
+          <rect x="640" y="444" width="230" height="54" rx="5" class="bx"/>
+          <text x="652" y="460" class="t">adapters/api</text>
+          <text x="652" y="476" class="s">HttpNotesApi · HttpUsersApi</text>
+          <text x="652" y="490" class="s">typed by schema.ts</text>
+          <rect x="910" y="444" width="230" height="54" rx="5" class="bx-u"/>
+          <text x="922" y="460" class="t">adapters/browser</text>
+          <text x="922" y="476" class="s">LocalStorageCurrentUserStore</text>
+          <text x="922" y="490" class="s">key example.currentUserId</text>
+
+          <!-- imports inside each lane -->
+          <line x1="755" y1="186" x2="755" y2="214" class="imp" marker-end="url(#ah)"/>
+          <line x1="1025" y1="186" x2="1025" y2="214" class="imp" marker-end="url(#ah)"/>
+          <line x1="135" y1="258" x2="135" y2="286" class="imp" marker-end="url(#ah)"/>
+          <line x1="405" y1="258" x2="405" y2="286" class="imp" marker-end="url(#ah)"/>
+          <line x1="755" y1="258" x2="755" y2="286" class="imp" marker-end="url(#ah)"/>
+          <line x1="1025" y1="258" x2="1025" y2="286" class="imp" marker-end="url(#ah)"/>
+          <line x1="70" y1="342" x2="70" y2="370" class="imp" marker-end="url(#ah)"/>
+          <line x1="405" y1="342" x2="405" y2="370" class="imp" marker-end="url(#ah)"/>
+          <line x1="755" y1="342" x2="755" y2="370" class="imp" marker-end="url(#ah)"/>
+          <line x1="1025" y1="342" x2="1025" y2="370" class="imp" marker-end="url(#ah)"/>
+          <line x1="270" y1="444" x2="270" y2="416" class="imp" marker-end="url(#ah)"/>
+          <line x1="755" y1="444" x2="755" y2="416" class="imp" marker-end="url(#ah)"/>
+          <line x1="1025" y1="444" x2="1025" y2="416" class="imp" marker-end="url(#ah)"/>
+
+          <!-- where the slices meet -->
+          <line x1="200" y1="342" x2="200" y2="370" class="imp-j" marker-end="url(#ahj)"/>
+          <text x="208" y="361" class="lb-j">CreateNote reads UserStore to check the author</text>
+          <path d="M870 172 L 930 214" class="imp-j" marker-end="url(#ahj)"/>
+
+          <!-- no imports between slices -->
+          <line x1="252" y1="237" x2="288" y2="237" class="no"/>
+          <text x="270" y="232" text-anchor="middle" class="xm">×</text>
+          <line x1="252" y1="315" x2="288" y2="315" class="no"/>
+          <text x="270" y="310" text-anchor="middle" class="xm">×</text>
+          <line x1="872" y1="237" x2="908" y2="237" class="no"/>
+          <text x="890" y="232" text-anchor="middle" class="xm">×</text>
+          <line x1="872" y1="315" x2="908" y2="315" class="no"/>
+          <text x="890" y="310" text-anchor="middle" class="xm">×</text>
+
+          <!-- HTTP contract -->
+          <path d="M640 466 L 580 466 L 580 248 L 522 248" class="http" marker-end="url(#ah)"/>
+          <text x="594" y="440" class="lb" transform="rotate(-90 594 440)">HTTP, typed by openapi.json</text>
+
+          <!-- shared domain -->
+          <rect x="330" y="560" width="500" height="64" rx="6" class="bx-j" stroke-width="2.4"/>
+          <rect x="334" y="564" width="492" height="56" rx="4" class="bx-g" style="fill: none"/>
+          <text x="346" y="582" class="t">packages/domain · @example/domain</text>
+          <text x="346" y="598" class="s">note.ts: Note.authorId, parseNoteTitle, canEdit</text>
+          <text x="346" y="612" class="s">user.ts: User, parseUserName, usersByName · result.ts</text>
+          <path d="M270 502 L 270 592 L 328 592" class="imp-g" marker-end="url(#ahg)"/>
+          <path d="M890 502 L 890 592 L 832 592" class="imp-g" marker-end="url(#ahg)"/>
+          <text x="278" y="540" class="lb-g">any API module</text>
+          <text x="882" y="540" text-anchor="end" class="lb-g">any web module</text>
+        </svg>
+      </div>
+      <figcaption>Arrows point from the importer to the module it imports. The slices meet in the shared domain (a note stores its author's id, and canEdit compares it), in the API's ports (CreateNote checks the author through UserStore), in the web screens, in both composition roots, and in the database's foreign key. A notes UI file that imports the users UI fails <code>./check</code> with <code>web/notes/ui (web-ui) imports web/users/ui (web-ui)</code>. I tried it to make sure.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>One screen, two slices</h2>
+    <p>The notes UI knows only an author's id. The screen fills two gaps with users UI: it hands the current user's id to <code>NewNoteForm</code>, and it passes <code>renderAuthor</code> so <code>NotesList</code> can show a name without knowing what a user is.</p>
+    <div class="pair">
+      <figure class="mid">
+        <div class="scroll">
+          <svg viewBox="0 0 640 400" role="img" aria-label="The notes start page. The masthead switcher and each author name come from the users slice. The new note form and the list come from the notes slice.">
+            <rect x="10" y="10" width="620" height="380" rx="8" class="wf-frame"/>
+            <path d="M10 18 a8 8 0 0 1 8 -8 h604 a8 8 0 0 1 8 8 v40 h-620 z" class="wf-bar"/>
+            <text x="28" y="40" class="wf-prod">Example dashboard</text>
+
+            <!-- UserSwitcher -->
+            <rect x="342" y="20" width="276" height="32" rx="5" class="wf-u"/>
+            <text x="354" y="41" class="wf-txt">Acting as</text>
+            <rect x="420" y="26" width="120" height="22" rx="4" class="wf-in"/>
+            <text x="428" y="41" class="wf-txt">Ana Novak</text>
+            <text x="526" y="41" class="wf-meta">▾</text>
+            <text x="560" y="41" class="wf-link">Users</text>
+            <text x="618" y="68" text-anchor="end" class="wf-tag-u">UserSwitcher</text>
+
+            <text x="40" y="100" class="wf-h1">Notes</text>
+
+            <!-- NewNoteForm inside CurrentUser -->
+            <rect x="30" y="116" width="580" height="54" rx="6" class="wf-u"/>
+            <rect x="38" y="122" width="564" height="42" rx="5" class="wf-n"/>
+            <text x="50" y="148" class="wf-txt">New note</text>
+            <rect x="118" y="132" width="330" height="24" rx="4" class="wf-in"/>
+            <rect x="460" y="132" width="80" height="24" rx="4" class="wf-in"/>
+            <text x="470" y="148" class="wf-txt">Add note</text>
+            <text x="598" y="184" text-anchor="end" class="wf-tag-n">NewNoteForm authorId={user?.id}</text>
+            <text x="34" y="184" class="wf-tag-u">CurrentUser</text>
+
+            <text x="40" y="214" class="wf-h2">ALL NOTES</text>
+
+            <!-- NotesList -->
+            <rect x="30" y="224" width="580" height="134" rx="6" class="wf-n"/>
+            <text x="46" y="254" class="wf-link">Supplier contacts for the sync hub</text>
+            <rect x="376" y="238" width="86" height="24" rx="4" class="wf-u"/>
+            <text x="386" y="254" class="wf-meta">Ana Novak</text>
+            <text x="474" y="254" class="wf-meta">19 Oct 2026, 14:02</text>
+            <line x1="46" y1="270" x2="594" y2="270" class="bx-m"/>
+            <text x="46" y="292" class="wf-link">Questions for Monday</text>
+            <rect x="376" y="276" width="86" height="24" rx="4" class="wf-u"/>
+            <text x="386" y="292" class="wf-meta">Ben Huber</text>
+            <text x="474" y="292" class="wf-meta">18 Oct 2026, 09:40</text>
+            <line x1="46" y1="308" x2="594" y2="308" class="bx-m"/>
+            <text x="46" y="330" class="wf-link">First note</text>
+            <rect x="358" y="314" width="104" height="24" rx="4" class="wf-u"/>
+            <text x="366" y="330" class="wf-meta">Unknown author</text>
+            <text x="474" y="330" class="wf-meta">12 Oct 2026, 17:15</text>
+            <text x="598" y="376" text-anchor="end" class="wf-tag-n">NotesList</text>
+            <text x="34" y="376" class="wf-tag-u">UserName in renderAuthor</text>
+          </svg>
+        </div>
+        <figcaption>Solid green outlines come from the notes slice, dashed violet ones from the users slice. The sample notes and names are made up. "Unknown author" is the real stand-in user that migration 0001 creates for notes from before users existed.</figcaption>
+      </figure>
+      <div>
+        <div class="codehead">apps/web/src/screens/notes/NotesScreen.tsx</div>
+<pre><span class="c">// imports from both public entries and shared UI</span>
+import { <span class="n">NewNoteForm, NotesList</span> } from '../../features/notes/ui/index.ts';
+import { <span class="u">CurrentUser, UserName, UserSwitcher</span> } from '../../features/users/ui/index.ts';
+import { Page, Section } from '../../sharedui/Page.tsx';
+
+export function NotesScreen() {
+  return (
+    &lt;Page title="Notes" actions={<span class="u">&lt;UserSwitcher /&gt;</span>}&gt;
+      <span class="u">&lt;CurrentUser&gt;</span>{(user) =&gt; <span class="n">&lt;NewNoteForm authorId={user?.id} /&gt;</span>}<span class="u">&lt;/CurrentUser&gt;</span>
+      &lt;Section title="All notes"&gt;
+        <span class="n">&lt;NotesList renderAuthor={(authorId) =&gt; </span><span class="u">&lt;UserName userId={authorId} /&gt;</span><span class="n">} /&gt;</span>
+      &lt;/Section&gt;
+    &lt;/Page&gt;
+  );
+}</pre>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>One rule, checked three times</h2>
+    <p>The rule "only the author may edit" is <code>canEdit</code> in the shared domain. The web app uses it twice to avoid asking for an edit the API would refuse. The API has the last word.</p>
+    <figure class="wide">
+      <div class="scroll">
+        <svg viewBox="0 0 1000 230" role="img" aria-label="An edit passes through NoteDetail, the web EditNote use case, the HTTP adapter and the API EditNote use case. Three of them call canEdit from the shared domain.">
+          <defs>
+            <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="head"/></marker>
+            <marker id="ahg2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="head-g"/></marker>
+          </defs>
+          <text x="20" y="18" class="rl">WEB</text>
+          <text x="770" y="18" class="rl">API</text>
+
+          <rect x="20" y="28" width="210" height="62" rx="5" class="bx-n"/>
+          <text x="32" y="46" class="t">NoteDetail</text>
+          <text x="32" y="63" class="s">shows EditNoteForm to the author,</text>
+          <text x="32" y="78" class="s">"Read-only" to everyone else</text>
+
+          <rect x="270" y="28" width="210" height="62" rx="5" class="bx-n"/>
+          <text x="282" y="46" class="t">EditNote (web)</text>
+          <text x="282" y="63" class="s">returns notAuthor or a title error</text>
+          <text x="282" y="78" class="s">without calling the API</text>
+
+          <rect x="520" y="28" width="210" height="62" rx="5" class="bx"/>
+          <text x="532" y="46" class="t">HttpNotesApi.edit</text>
+          <text x="532" y="63" class="s">PATCH /notes/{id}</text>
+          <text x="532" y="78" class="s">header x-user-id: the editor</text>
+
+          <rect x="770" y="28" width="210" height="62" rx="5" class="bx-n"/>
+          <text x="782" y="46" class="t">EditNote (API)</text>
+          <text x="782" y="63" class="s">404 note_not_found, 403 not_author,</text>
+          <text x="782" y="78" class="s">422 for a title error</text>
+
+          <line x1="230" y1="59" x2="268" y2="59" class="imp" marker-end="url(#ah2)"/>
+          <line x1="480" y1="59" x2="518" y2="59" class="imp" marker-end="url(#ah2)"/>
+          <line x1="730" y1="59" x2="768" y2="59" class="http" marker-end="url(#ah2)"/>
+
+          <rect x="350" y="160" width="300" height="52" rx="6" class="bx-g"/>
+          <text x="362" y="181" class="t">canEdit(note, userId)</text>
+          <text x="362" y="199" class="s">note.authorId === userId, in @example/domain</text>
+
+          <path d="M125 90 L 125 186 L 348 186" class="imp-g" marker-end="url(#ahg2)"/>
+          <line x1="375" y1="90" x2="430" y2="158" class="imp-g" marker-end="url(#ahg2)"/>
+          <path d="M875 90 L 875 186 L 652 186" class="imp-g" marker-end="url(#ahg2)"/>
+          <text x="133" y="140" class="lb-g">calls</text>
+          <text x="410" y="124" class="lb-g">calls</text>
+          <text x="867" y="140" text-anchor="end" class="lb-g">calls</text>
+        </svg>
+      </div>
+      <figcaption>The adapter does not check the rule. It only sends the request and maps 403, 404 and 422 back to the same error names the web use case returns.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>What I noticed</h2>
+    <div class="cols">
+      <div>
+        <h3>Holds up</h3>
+        <ul>
+          <li>The slices stay apart in every layer of both apps, and the check enforces it.</li>
+          <li>Each screen is the only place that joins slice UI. The notes UI takes an id and a render function, not a user, so it would work with any author display.</li>
+          <li>Rules shared by both apps live once: <code>parseUserName</code>, <code>usersByName</code> and <code>canEdit</code> are in <code>packages/domain</code>.</li>
+          <li>The migration adds a user only when old notes exist and assigns them to it, so a filled database migrates without errors. It has its own test.</li>
+          <li>The glossary names User, User name, Current user and Author, including the missing sign-in.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Worth a decision</h3>
+        <ul>
+          <li>Slice UI links to app routes: <code>NotesList</code> to <code>/notes/$noteId</code>, <code>UserSwitcher</code> to <code>/users</code>. The paths are typed through <code>routes.tsx</code>, so slice UI depends on the composition root in a way the check can't see. A screen could pass the link in instead.</li>
+          <li>The kit doesn't describe the render-slot pattern (<code>renderAuthor</code>, the <code>CurrentUser</code> render prop). The other session invented it. It belongs in the kit's TypeScript guide so the next slice copies it.</li>
+          <li>The kit doesn't say that a use case may read another slice's port, as <code>CreateNote</code> reads <code>UserStore</code>. It is allowed, because ports belong to the app, not the slice. One line in <code>docs/ARCHITECTURE.md</code> would settle it.</li>
+          <li>The <code>x-user-id</code> header is defined in the notes routes. It moves to <code>sharedui/http.ts</code> when a second slice writes as the current user, and becomes a port when sign-in arrives.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</main>
+</body>
+</html>

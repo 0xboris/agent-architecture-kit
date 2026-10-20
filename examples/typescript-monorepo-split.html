@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+  :root { color-scheme: light; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  body { margin: 0; font: 14px system-ui, -apple-system, "Segoe UI", sans-serif; }
+  img { max-width: 100%; }
+  [hidden] { display: none !important; }
+</style>
+<title>TypeScript Monorepo Split</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  /* Layout: one wide architecture drawing, then two compact reference blocks below it. */
+  :root {
+    --bg: #f6f7f9;
+    --fg: #1d232b;
+    --muted: #5b6573;
+    --line: #c9cfd8;
+    --band: #eceff3;
+    --box: #ffffff;
+    --accent: #c4501c;
+    --gen: #2f6fb0;
+    --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14181d; --fg: #e3e7ec; --muted: #9aa4b1; --line: #3a424d;
+      --band: #1b2027; --box: #20262e; --accent: #f08a55; --gen: #6fa8e0;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14181d; --fg: #e3e7ec; --muted: #9aa4b1; --line: #3a424d;
+    --band: #1b2027; --box: #20262e; --accent: #f08a55; --gen: #6fa8e0;
+    color-scheme: dark;
+  }
+  body {
+    background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.55;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 28px 48px;
+  }
+  main { max-width: 1180px; margin: 0 auto; display: grid; gap: 28px; }
+  h1 { font-size: 1.6rem; font-weight: 600; margin: 0; text-wrap: balance; }
+  h2 { font-size: 1.05rem; font-weight: 600; margin: 0 0 10px; }
+  p.lede { margin: 6px 0 0; color: var(--muted); max-width: 65ch; }
+  code { font-family: var(--font-mono); font-size: 0.88em; }
+
+  figure { margin: 0; display: grid; gap: 10px; }
+  .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--box); padding: 12px; }
+  svg { display: block; width: 100%; min-width: 920px; height: auto; color: var(--fg); }
+  figcaption { color: var(--muted); font-size: 0.92rem; max-width: 80ch; }
+
+  /* drawing classes */
+  .band { fill: var(--band); stroke: none; }
+  .bx { fill: var(--box); stroke: var(--fg); stroke-width: 1.2; }
+  .bx-shared { fill: var(--box); stroke: var(--gen); stroke-width: 2; }
+  .bx-ext { fill: var(--box); stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 4 3; }
+  .t { fill: var(--fg); font-family: var(--font-mono); font-size: 13px; font-weight: 500; }
+  .s { fill: var(--muted); font-family: var(--font-body); font-size: 11.5px; }
+  .hd { fill: var(--muted); font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; }
+  .lb { fill: var(--muted); font-family: var(--font-body); font-size: 11px; }
+  .lb-acc { fill: var(--accent); font-family: var(--font-body); font-size: 11.5px; font-weight: 600; }
+  .lb-gen { fill: var(--gen); font-family: var(--font-body); font-size: 11px; }
+  .imp { stroke: var(--fg); stroke-width: 1.3; fill: none; }
+  .http { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 7 4; fill: none; }
+  .gen { stroke: var(--gen); stroke-width: 1.5; stroke-dasharray: 2 3; fill: none; }
+  .no { stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 3 3; fill: none; }
+  .no-x { stroke: var(--accent); stroke-width: 2; }
+  .head-fg { fill: var(--fg); }
+  .head-acc { fill: var(--accent); }
+  .head-gen { fill: var(--gen); }
+
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+  .cols > section { min-width: 0; }
+  ul { margin: 0; padding-left: 1.1rem; display: grid; gap: 6px; }
+  li { max-width: 70ch; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+  th, td { text-align: left; vertical-align: top; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; color: var(--muted); font-size: 0.82rem; letter-spacing: 0.04em; text-transform: uppercase; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>TypeScript monorepo split</h1>
+    <p class="lede">The admin web app and the API live in one repository. They share business rules as code, through <code>packages/domain</code>, and exchange data only over HTTP, through the contract in <code>openapi.json</code>.</p>
+  </header>
+
+  <figure>
+    <div class="scroll">
+      <svg viewBox="0 0 1260 490" role="img" aria-label="Two apps, web and api, each layered as composition root, slice UI, use cases, domain and adapters. Both app domains import the shared packages/domain. The web app's API adapter calls the API's routes over HTTP. The API's routes generate openapi.json, from which the web client and the mobile app's client are generated. Imports between the two apps are forbidden.">
+        <defs>
+          <marker id="a-fg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="head-fg"/></marker>
+          <marker id="a-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="head-acc"/></marker>
+          <marker id="a-gen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="head-gen"/></marker>
+        </defs>
+
+        <!-- column bands -->
+        <rect class="band" x="10" y="36" width="420" height="396" rx="8"/>
+        <rect class="band" x="460" y="36" width="180" height="396" rx="8"/>
+        <rect class="band" x="670" y="36" width="420" height="396" rx="8"/>
+        <text class="hd" x="220" y="24" text-anchor="middle">apps/web</text>
+        <text class="hd" x="550" y="24" text-anchor="middle">shared</text>
+        <text class="hd" x="880" y="24" text-anchor="middle">apps/api</text>
+        <text class="hd" x="1182" y="24" text-anchor="middle">outside</text>
+
+        <!-- row: composition -->
+        <rect class="bx" x="24" y="48" width="392" height="48" rx="6"/>
+        <text class="t" x="220" y="68" text-anchor="middle">app/ · composition root</text>
+        <text class="s" x="220" y="86" text-anchor="middle">main.tsx · router · providers · wire-*.ts</text>
+        <rect class="bx-ext" x="474" y="48" width="152" height="48" rx="6"/>
+        <text class="t" x="550" y="68" text-anchor="middle">mobile app</text>
+        <text class="s" x="550" y="86" text-anchor="middle">own repo · spec only</text>
+        <rect class="bx" x="684" y="48" width="392" height="48" rx="6"/>
+        <text class="t" x="880" y="68" text-anchor="middle">app/ · composition root</text>
+        <text class="s" x="880" y="86" text-anchor="middle">main.ts · container.ts · wire-*.ts</text>
+
+        <!-- row: screens / spec -->
+        <rect class="bx" x="24" y="128" width="176" height="48" rx="6"/>
+        <text class="t" x="112" y="148" text-anchor="middle">screens/</text>
+        <text class="s" x="112" y="166" text-anchor="middle">combine slice UI</text>
+        <rect class="bx-shared" x="474" y="128" width="152" height="48" rx="6"/>
+        <text class="t" x="550" y="148" text-anchor="middle">openapi.json</text>
+        <text class="s" x="550" y="166" text-anchor="middle">generated · committed</text>
+
+        <!-- row: slice UI and adapters -->
+        <rect class="bx" x="24" y="208" width="176" height="48" rx="6"/>
+        <text class="t" x="112" y="228" text-anchor="middle">features/*/ui</text>
+        <text class="s" x="112" y="246" text-anchor="middle">components · hooks</text>
+        <rect class="bx" x="240" y="208" width="176" height="48" rx="6"/>
+        <text class="t" x="328" y="228" text-anchor="middle">adapters/api</text>
+        <text class="s" x="328" y="246" text-anchor="middle">client from the spec</text>
+        <rect class="bx" x="684" y="208" width="176" height="48" rx="6"/>
+        <text class="t" x="772" y="228" text-anchor="middle">features/*/ui</text>
+        <text class="s" x="772" y="246" text-anchor="middle">Hono routes · Zod</text>
+        <rect class="bx" x="900" y="208" width="176" height="48" rx="6"/>
+        <text class="t" x="988" y="228" text-anchor="middle">adapters/postgres</text>
+        <text class="s" x="988" y="246" text-anchor="middle">Drizzle</text>
+        <rect class="bx-ext" x="1120" y="208" width="124" height="48" rx="6"/>
+        <text class="t" x="1182" y="228" text-anchor="middle">PostgreSQL</text>
+        <text class="s" x="1182" y="246" text-anchor="middle">the data</text>
+
+        <!-- row: use cases -->
+        <rect class="bx" x="24" y="288" width="176" height="48" rx="6"/>
+        <text class="t" x="112" y="308" text-anchor="middle">features/*/usecases</text>
+        <text class="s" x="112" y="326" text-anchor="middle">LoadNotes · CreateNote</text>
+        <rect class="bx" x="684" y="288" width="176" height="48" rx="6"/>
+        <text class="t" x="772" y="308" text-anchor="middle">features/*/usecases</text>
+        <text class="s" x="772" y="326" text-anchor="middle">ListNotes · CreateNote</text>
+
+        <!-- row: domain -->
+        <rect class="bx" x="24" y="368" width="392" height="48" rx="6"/>
+        <text class="t" x="220" y="388" text-anchor="middle">domain/ · this app only</text>
+        <text class="s" x="220" y="406" text-anchor="middle">ports: NotesApi · display rules</text>
+        <rect class="bx-shared" x="474" y="368" width="152" height="48" rx="6"/>
+        <text class="t" x="550" y="388" text-anchor="middle">packages/domain</text>
+        <text class="s" x="550" y="406" text-anchor="middle">model · parse · rules</text>
+        <rect class="bx" x="684" y="368" width="392" height="48" rx="6"/>
+        <text class="t" x="880" y="388" text-anchor="middle">domain/ · this app only</text>
+        <text class="s" x="880" y="406" text-anchor="middle">ports: NoteStore · server-only rules</text>
+
+        <!-- imports: web -->
+        <line class="imp" x1="112" y1="96" x2="112" y2="126" marker-end="url(#a-fg)"/>
+        <line class="imp" x1="328" y1="96" x2="328" y2="206" marker-end="url(#a-fg)"/>
+        <text class="lb" x="120" y="115">wires</text>
+        <line class="imp" x1="112" y1="176" x2="112" y2="206" marker-end="url(#a-fg)"/>
+        <text class="lb" x="120" y="196">imports ui/index.ts</text>
+        <line class="imp" x1="112" y1="256" x2="112" y2="286" marker-end="url(#a-fg)"/>
+        <line class="imp" x1="112" y1="336" x2="112" y2="366" marker-end="url(#a-fg)"/>
+        <line class="imp" x1="328" y1="256" x2="328" y2="366" marker-end="url(#a-fg)"/>
+        <text class="lb" x="336" y="282">implements</text>
+        <text class="lb" x="336" y="296">NotesApi</text>
+
+        <!-- imports: api -->
+        <line class="imp" x1="772" y1="96" x2="772" y2="206" marker-end="url(#a-fg)"/>
+        <line class="imp" x1="988" y1="96" x2="988" y2="206" marker-end="url(#a-fg)"/>
+        <text class="lb" x="996" y="115">wires</text>
+        <line class="imp" x1="772" y1="256" x2="772" y2="286" marker-end="url(#a-fg)"/>
+        <line class="imp" x1="772" y1="336" x2="772" y2="366" marker-end="url(#a-fg)"/>
+        <line class="imp" x1="988" y1="256" x2="988" y2="366" marker-end="url(#a-fg)"/>
+        <text class="lb" x="996" y="282">implements</text>
+        <text class="lb" x="996" y="296">NoteStore</text>
+        <line class="imp" x1="1076" y1="232" x2="1118" y2="232" marker-end="url(#a-fg)"/>
+        <text class="lb" x="1097" y="224" text-anchor="middle">SQL</text>
+
+        <!-- both app domains import the shared package -->
+        <line class="imp" x1="416" y1="392" x2="472" y2="392" marker-end="url(#a-fg)"/>
+        <line class="imp" x1="684" y1="392" x2="628" y2="392" marker-end="url(#a-fg)"/>
+        <text class="lb" x="444" y="384" text-anchor="middle">imports</text>
+        <text class="lb" x="656" y="384" text-anchor="middle">imports</text>
+
+        <!-- HTTP at run time -->
+        <line class="http" x1="416" y1="232" x2="682" y2="232" marker-end="url(#a-acc)"/>
+        <text class="lb-acc" x="550" y="222" text-anchor="middle">HTTP · JSON</text>
+        <text class="lb" x="550" y="250" text-anchor="middle">the only path for data</text>
+
+        <!-- generated at build -->
+        <polyline class="gen" points="720,208 720,152 628,152" marker-end="url(#a-gen)"/>
+        <text class="lb-gen" x="674" y="144" text-anchor="middle">generates</text>
+        <polyline class="gen" points="474,152 380,152 380,206" marker-end="url(#a-gen)"/>
+        <text class="lb-gen" x="427" y="144" text-anchor="middle">generates</text>
+        <line class="gen" x1="550" y1="128" x2="550" y2="98" marker-end="url(#a-gen)"/>
+        <text class="lb-gen" x="556" y="117">client</text>
+
+        <!-- forbidden: imports between apps -->
+        <line class="no" x1="200" y1="312" x2="684" y2="312"/>
+        <line class="no-x" x1="541" y1="303" x2="559" y2="321"/>
+        <line class="no-x" x1="559" y1="303" x2="541" y2="321"/>
+        <text class="lb" x="550" y="340" text-anchor="middle">no imports between apps</text>
+
+        <!-- legend -->
+        <line class="imp" x1="24" y1="466" x2="64" y2="466" marker-end="url(#a-fg)"/>
+        <text class="lb" x="72" y="470">import, checked by archcheck</text>
+        <line class="http" x1="260" y1="466" x2="300" y2="466" marker-end="url(#a-acc)"/>
+        <text class="lb" x="308" y="470">request at run time</text>
+        <line class="gen" x1="450" y1="466" x2="490" y2="466" marker-end="url(#a-gen)"/>
+        <text class="lb" x="498" y="470">generated by ./check</text>
+        <line class="no-x" x1="640" y1="459" x2="654" y2="473"/>
+        <line class="no-x" x1="654" y1="459" x2="640" y2="473"/>
+        <text class="lb" x="664" y="470">forbidden</text>
+        <rect class="bx-shared" x="740" y="458" width="20" height="16" rx="3"/>
+        <text class="lb" x="768" y="470">shared by both apps</text>
+        <rect class="bx-ext" x="904" y="458" width="20" height="16" rx="3"/>
+        <text class="lb" x="932" y="470">outside this repository's code</text>
+      </svg>
+    </div>
+    <figcaption>Each app is layered as the kit describes, with its own composition root, slices, domain and adapters. The apps meet in two places only: the shared rules in <code>packages/domain</code>, imported at build time, and the API's HTTP routes, called at run time. <code>openapi.json</code> is generated from the API's routes, and the web app and the mobile app each generate their client from it.</figcaption>
+  </figure>
+
+  <div class="cols">
+    <section>
+      <h2>What lives where</h2>
+      <table>
+        <thead><tr><th>Part</th><th>Holds</th><th>Never holds</th></tr></thead>
+        <tbody>
+          <tr><td><code>packages/domain</code></td><td>Model types and brands, parse functions such as <code>parseNoteTitle</code>, pure rules such as <code>newestFirst</code>, <code>Result</code></td><td>Ports, use cases, I/O, packages</td></tr>
+          <tr><td>an app's <code>domain/</code></td><td>That app's ports and the rules only it needs</td><td>Anything the other app imports</td></tr>
+          <tr><td><code>openapi.json</code></td><td>The wire contract: paths, request and response schemas, constraints such as <code>maxLength</code></td><td>Hand edits. <code>./check</code> fails when it is stale</td></tr>
+          <tr><td><code>apps/web/screens/</code></td><td>Pages that arrange the public UI of several slices</td><td>Use cases, data access, business decisions</td></tr>
+        </tbody>
+      </table>
+    </section>
+    <section>
+      <h2>How a note title is checked</h2>
+      <ul>
+        <li>The web form calls <code>parseNoteTitle</code> from <code>packages/domain</code> and shows "Enter a title." before anything is sent.</li>
+        <li>The web app's <code>adapters/api</code> sends <code>POST /notes</code> through the client generated from <code>openapi.json</code>.</li>
+        <li>The API's route validates the body with its Zod schema, and its use case calls the same <code>parseNoteTitle</code>. The API's answer decides.</li>
+        <li>The mobile app has no shared code. It gets the same limits from the spec's <code>maxLength</code> and relies on the API's 422.</li>
+      </ul>
+    </section>
+  </div>
+</main>
+</body>
+</html>
