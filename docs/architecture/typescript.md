@@ -37,7 +37,7 @@ Node runs the TypeScript files directly by stripping types, and `tsc --noEmit` c
 - **Ports.** Interfaces that return promises when the real implementation does I/O. When a call has several expected outcomes, return a union of them, so that callers handle each one.
 - **Middleware.** A class that implements a port and wraps another instance of it, like `LoggingNoteStore`.
 
-The domain imports no packages and no Node built-ins. It must not call `Date.now()`, `new Date()` without arguments, `Math.random()`, `crypto.randomUUID()`, `fetch`, timers, or `process.env`, and must not log through `console`. Take the time and ids from ports.
+The domain imports no Node built-ins, and no packages except pure ones that the project allows in `architecture.json`, such as Zod. Such a package stays out of the domain's exports: other modules import the domain's types and parse functions, which return the domain's own `Result` and error unions. The domain must not call `Date.now()`, `new Date()` without arguments, `Math.random()`, `crypto.randomUUID()`, `fetch`, timers, or `process.env`, and must not log through `console`. Take the time and ids from ports.
 
 ## Slices
 
