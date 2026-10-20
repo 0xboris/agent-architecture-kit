@@ -388,7 +388,8 @@ TARGET_FIXES = {
     "adapter": "Depend on a port declared in the domain. The composition root passes the adapter in.",
     "composition": "Nothing imports the composition root. Receive what you need through your constructor.",
     "test-support": "Only test code imports test support.",
-    "ui": "Slices never depend on each other. Move shared types and rules into the domain.",
+    "ui": "Slices never depend on each other. Move shared types and rules into the domain. When one slice's UI "
+          "shows something from another slice, take it as a parameter or a slot, and let a screen fill it.",
     "usecases": "Use cases are never shared between slices. Write the use case in this slice, "
                 "and move shared rules into the domain.",
 }
@@ -397,6 +398,9 @@ TARGET_FIXES = {
 def import_fix(source, target):
     if target.kind in ("composition", "test-support"):
         return TARGET_FIXES[target.kind]
+    # Kinds may have project names, such as web-ui, so a slice is recognized by its slice, not its kind name.
+    if source.slice is not None and target.slice is not None and source.slice != target.slice:
+        return TARGET_FIXES["usecases"] if "usecases" in target.kind else TARGET_FIXES["ui"]
     return SOURCE_FIXES.get(source.kind) or TARGET_FIXES.get(target.kind) or f"See the dependency rule in {DOCS}."
 
 

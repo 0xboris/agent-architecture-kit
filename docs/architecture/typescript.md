@@ -77,7 +77,7 @@ The linter runs type-aware rules, which need type information from the compiler.
 - **Generated code is not linted.** Exclude a generated file, such as an API client, in the linter's settings, and regenerate it instead of editing it.
 - **Fix a lint finding instead of silencing it.** A disable comment needs the owner's approval, like a change to the linter's settings.
 
-TypeScript 7.0's npm package holds the compiler but no JavaScript API: `import ts from 'typescript'` gives only its version. A tool that calls that API, such as a code generator that prints TypeScript, fails with TypeScript 7. Give such a tool a workspace package of its own that depends on the tool and on TypeScript 6, and run it from there. A package manager resolves a tool's `typescript` peer dependency from the package that depends on the tool, so the rest of the repository keeps TypeScript 7. Tools that only strip types, such as Node, Vite, and Vitest, work with any version.
+TypeScript 7.0's npm package holds the compiler but no JavaScript API: `import ts from 'typescript'` gives only its version. A tool that calls that API, such as a code generator that prints TypeScript, fails with TypeScript 7. Give such a tool a workspace package of its own that depends on the tool and on the TypeScript version that the tool's peer dependency asks for, such as 5.9 for openapi-typescript 7, and run it from there. A package manager resolves a tool's `typescript` peer dependency from the package that depends on the tool, so the rest of the repository keeps TypeScript 7. Tools that only strip types, such as Node, Vite, and Vitest, work with any version.
 
 ## Tests
 
@@ -104,8 +104,8 @@ apps/web/src/adapters/api/       the generated API client and the adapter that p
 ```
 
 - **One `architecture.json` at the root** maps the modules of every app. Each module of an app has an `"app"` field, and the shared domain has none. An import between apps fails as `app`.
-- **The shared domain is a workspace package**, such as `@acme/domain`, whose `exports` field points at `src/index.ts`. Apps import it by name, and `typescript.aliases` in `architecture.json` maps the name to its directory, so the check sees the import. Its `tsconfig.json` sets `"types": []`, so code that needs Node does not compile there. It holds `Result` too, since it may not import an app's utilities.
-- **Kinds differ per app where the libraries differ.** An app whose UI uses other libraries gets kinds of its own, such as `web-ui` and `web-composition` next to `ui` and `composition`. Kinds without libraries, such as `domain` and `usecases`, are shared by every app.
+- **The shared domain is a workspace package**, such as `@acme/domain`, whose `exports` field points at `src/index.ts`. Apps import it by name, and `typescript.aliases` in `architecture.json` maps the name to its directory, so the check sees the import. Its `tsconfig.json` sets `"types": []`, so code that needs Node does not compile there. Its tests import their runner by name, such as `import { test } from 'vitest'`, which needs no Node types; with `node:test`, a second `tsconfig.test.json` loads Node's types for the test files only. It holds `Result` too, since it may not import an app's utilities.
+- **Kinds differ per app where the libraries differ.** An app whose UI uses other libraries gets kinds of its own, such as `web-ui` and `web-composition` next to `ui` and `composition`. Kinds without libraries, such as `domain` and `usecases`, are shared by every app. Every kind whose modules use the shared rules lists `shared-domain` in `mayImport`.
 - **A slice's UI has a public entry.** `"publicEntry": ["index.ts"]` on the UI kind makes every other module, screens and the composition root included, import the slice's UI from `ui/index.ts`. The check reports any import that reaches past it.
 - **UI components get their use cases from the slice.** The slice's UI exports a provider, such as `NotesProvider`, that the composition root fills with the slice's use cases. Components read them from it, so a screen can place a component without knowing its use cases.
 - **Screens import slice UI and shared UI only.** Routes are defined in code in the composition root, not by a framework's file layout, and each route shows one screen.
@@ -130,8 +130,72 @@ apps/web/src/adapters/api/       the generated API client and the adapter that p
   }]
   ```
 
-- **The client generator gets its own package when it needs TypeScript 6,** as openapi-typescript does. A package such as `packages/api-types` depends on the generator and on TypeScript 6, and writes the client into the app's `adapters/api/`.
-- **The contract lives with the API.** A composition file, such as `openapi.ts`, prints the OpenAPI document from the routes, and the API commits it as `openapi.json`. The web app generates its client types from it into `adapters/api/`. `./check` regenerates both and fails when either differs from the committed file.
+  `react/rules-of-hooks` is not in oxlint's correctness category. Turn it on in an override for the React app's files only, such as `apps/web/src/**/*.{ts,tsx}`: in other apps, a function named like `useCases` is not a hook.
+
+- **The client generator gets its own package when it needs an older TypeScript,** as openapi-typescript does. A package such as `packages/api-types` depends on the generator and on the TypeScript version it asks for, and writes the client into the app's `adapters/api/`. `./check` runs the generator from that package.
+- **The contract lives with the API.** A composition file, such as `openapi.ts`, prints the OpenAPI document from the routes, and the API commits it as `openapi.json`. Add it to the composition kind's `allowedFiles`. It builds the app with ports whose methods reject, because printing the document calls none of them, so it needs no database. The web app generates its client types from it into `adapters/api/`. `./check` regenerates both and fails when either differs from the committed file.
 - **The API adapter of a client** implements the client's port with the generated client and parses every response with the shared parse functions. Its tests answer requests with recorded responses in the contract's shape.
 - **Tests of UI components** render them with real use cases on a stubbed port, inside the providers they need. A helper that sets this up is a `*.testing.tsx` file in the slice's UI, so production code cannot import it.
 
+### From one app to several
+
+`init` creates one app. To grow it into several:
+
+1. Move `src/` and the app's `package.json` and `tsconfig.json` into `apps/api/`. Add `pnpm-workspace.yaml` with `apps/*` and `packages/*`, a root `package.json` for the tools that run on every package, such as the linter and TypeScript, and a `tsconfig.base.json` that each package extends.
+2. Create `packages/domain` for the rules that more than one app needs, and move them there from the API's domain. Rewrite their imports to the package name.
+3. Map every app in `architecture.json`, as in the example below. Test files and configuration files now sit below the root, so their patterns need `**/` or the app's directory.
+4. Change `.github/CODEOWNERS`: settings files anywhere, such as `**/package.json`, `**/tsconfig*.json`, and `**/vite.config.*`, the contract `/apps/api/openapi.json`, and every composition root, `/apps/*/src/app/`. Change the `paths` in `.claude/rules/architecture.md` to `apps/**/src/**` and `packages/**/src/**`.
+5. Add the contract step to `./check`, run the type checks and tests of every package (`pnpm --recursive run typecheck`), and build each client.
+6. Describe the workspace in `docs/architecture/stack.md`. pnpm 10 and later run no install script of a dependency unless `allowBuilds` in `pnpm-workspace.yaml` allows it, and may refuse a version released in the last day; note what the project allows and why.
+
+```jsonc
+{
+  "language": "typescript",
+  "sourceRoots": ["."],
+  "testFiles": ["**/*.test.ts", "**/*.test.tsx", "**/*.testing.ts", "**/*.testing.tsx"],
+  "ignore": ["*.config.ts", "*.config.js", "apps/*/*.config.ts"],
+  "glossary": "GLOSSARY.md",
+  "typescript": {"aliases": {"@acme/domain": "packages/domain/src"}},
+  "modules": [
+    {"path": "packages/domain/src", "kind": "shared-domain", "name": "shared/domain"},
+
+    {"path": "apps/api/src/app", "kind": "composition", "name": "api/app", "app": "api"},
+    {"path": "apps/api/src/domain", "kind": "domain", "name": "api/domain", "app": "api"},
+    {"path": "apps/api/src/features/*/usecases", "kind": "usecases", "name": "api/{1}/usecases", "slice": "{1}", "app": "api"},
+    {"path": "apps/api/src/features/*/ui", "kind": "ui", "name": "api/{1}/ui", "slice": "{1}", "app": "api"},
+    // ... the API's shared UI, adapters, utilities, and test support, each with "app": "api"
+
+    {"path": "apps/web/src/app", "kind": "web-composition", "name": "web/app", "app": "web"},
+    {"path": "apps/web/src/domain", "kind": "domain", "name": "web/domain", "app": "web"},
+    {"path": "apps/web/src/features/*/usecases", "kind": "usecases", "name": "web/{1}/usecases", "slice": "{1}", "app": "web"},
+    {"path": "apps/web/src/features/*/ui", "kind": "web-ui", "name": "web/{1}/ui", "slice": "{1}", "app": "web"},
+    {"path": "apps/web/src/screens/*", "kind": "screen", "name": "web/screens/{1}", "app": "web"},
+    {"path": "apps/web/src/sharedui", "kind": "web-shared-ui", "name": "web/sharedui", "app": "web"},
+    {"path": "apps/web/src/adapters/*", "kind": "adapter", "name": "web/adapters/{1}", "app": "web"},
+    {"path": "apps/web/src/testsupport", "kind": "test-support", "name": "web/testsupport", "app": "web"}
+  ],
+  "kinds": {
+    "shared-domain": {"mayImport": [], "external": {"allow": []}, "forbiddenCalls": ["@io"]},
+    "domain": {"mayImport": ["shared-domain", "utilities"], "external": {"allow": []}, "forbiddenCalls": ["@io"]},
+    "usecases": {"mayImport": ["shared-domain", "domain", "utilities"], "external": {"allow": []}, "forbiddenCalls": ["@io"]},
+    // ui, shared-ui, adapter, utilities, and test-support as in the template, with "shared-domain" added to
+    // mayImport where they use the shared rules; composition with "openapi.ts" in allowedFiles
+    "web-ui": {
+      "mayImport": ["usecases@same-slice", "shared-domain", "domain", "web-shared-ui"],
+      "external": {"allow": ["@react"]},
+      "forbiddenCalls": ["@io"],
+      "publicEntry": ["index.ts"]
+    },
+    "screen": {"mayImport": ["web-ui", "web-shared-ui"], "external": {"allow": ["react", "@tanstack/react-router"]}, "forbiddenCalls": ["@io"]},
+    "web-shared-ui": {"mayImport": [], "external": {"allow": ["react"]}, "forbiddenCalls": ["@io"], "bannedTerms": "glossary"},
+    "web-composition": {
+      "mayImport": ["*"],
+      "external": {"allow": ["@react", "react-dom/client"]},
+      "composition": {"allowedFiles": ["main.tsx", "container.tsx", "routes.tsx", "config.ts", "live.ts", "wire-*.ts"], "controlFlowAllowedIn": ["config.ts"], "maxLines": 400}
+    }
+  },
+  "externalSets": {"react": ["react", "@tanstack/react-query", "@tanstack/react-router"]}
+}
+```
+
+The library names in the example are one project's choices; `docs/architecture/stack.md` names the project's own.

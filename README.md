@@ -64,7 +64,7 @@ Then, in the new folder:
    - Add an iOS build of the app to CI, as `docs/architecture/swift.md` describes.
 3. Commit, push, and set up branch protection on `main`: require pull requests, require code-owner reviews, and require the `check` workflow.
 4. To use other libraries than the template's, follow "Changing a library" in `docs/architecture/stack.md`. Rewrite the Notes slice with them first, so agents copy the right patterns.
-5. Let agents use the Notes slice as their reference. Once your first real slice exists and follows the same patterns, delete the Notes slice, its tests, its wiring, and its glossary entries, and name the new slice as the reference in `AGENTS.md`.
+5. Let agents use the Notes slice as their reference. Once your first real slice exists and follows the same patterns, delete the Notes slice, its tests, its wiring, and its glossary entries, and name the new slice as the reference in `AGENTS.md`. If the product itself has notes, its notes feature grows from the Notes slice, which stays the reference.
 
 Agents should open pull requests under their own account or a GitHub App. GitHub does not let the author of a pull request approve it, so if agents push as you, the code-owner review cannot happen.
 
@@ -197,11 +197,12 @@ Retested on Linux on 2026-10-19 with Node 24.22, TypeScript 7.0.2, oxlint 1.88.0
 
 - **Lint.** `init typescript` creates a project whose `./check` passes, including the new lint step. Lint fails on `'x' as NoteTitle` in a slice's UI, passes it in the domain, fails on `JSON.parse` assigned to a typed value, and allows `as const`.
 - **Adoption.** `adopt typescript` adds `.oxlintrc.json` and keeps an existing one.
-- **Several apps.** `coco-dashboard` moved from TypeScript 6 and ESLint to TypeScript 7 and oxlint, and `./check` passes: the contract, lint, type checks of every package, Vitest, and the Vite build. Lint fails on an assertion in a slice's `.tsx` file and on a list item without a key, and allows assertions in the shared domain and in tests. openapi-typescript, which needs TypeScript's JavaScript API, runs with TypeScript 6 from a package of its own and generates the same client.
+- **Several apps.** `coco-dashboard` moved from TypeScript 6 and ESLint to TypeScript 7 and oxlint, and `./check` passes: the contract, lint, type checks of every package, Vitest, and the Vite build. Lint fails on an assertion in a slice's `.tsx` file and on a list item without a key, and allows assertions in the shared domain and in tests. openapi-typescript, which needs TypeScript's JavaScript API, runs with TypeScript 5.9 from a package of its own and generates the same client. The hooks rule runs only on the React app, because the API's `useCases()` wiring helper is not a hook.
+- **A fresh agent.** Given only the kit and the stack, a new agent built an API, a web app, and a shared domain with notes and users. It arrived at the same design, with an author slot that a screen fills and the edit rule in the shared domain, and `./check` passed. The gaps it reported are fixed: the steps from one app to several, an `architecture.json` for several apps, the React hooks rule, the shared domain's tests, `openapi.ts` in `allowedFiles`, and the fix message for an import between slices whose kinds have project names, such as `web-ui`.
 
 Not tested:
 
-- **A template for several apps.** `init` still creates one app. The layout is described in `docs/ARCHITECTURE.md` and `docs/architecture/typescript.md`, and `coco-dashboard` is the only worked example.
+- **A template for several apps.** `init` still creates one app. "From one app to several" in `docs/architecture/typescript.md` gives the steps and an `architecture.json` for an API, a web app, and a shared domain.
 
 - **The Swift template after 2026-10-15.** Its new `StubNoteStore` and the rewritten tests have not been compiled. Run `./check` on macOS before relying on them.
 
