@@ -178,6 +178,7 @@ apps/web/src/adapters/api/       the generated API client and the adapter that p
     "shared-domain": {"mayImport": [], "external": {"allow": []}, "forbiddenCalls": ["@io"]},
     "domain": {"mayImport": ["shared-domain", "utilities"], "external": {"allow": []}, "forbiddenCalls": ["@io"]},
     "usecases": {"mayImport": ["shared-domain", "domain", "utilities"], "external": {"allow": []}, "forbiddenCalls": ["@io"]},
+    // a pure library that the project allows, such as "zod", goes into external.allow of shared-domain and domain
     // ui, shared-ui, adapter, utilities, and test-support as in the template, with "shared-domain" added to
     // mayImport where they use the shared rules; composition with "openapi.ts" in allowedFiles
     "web-ui": {
