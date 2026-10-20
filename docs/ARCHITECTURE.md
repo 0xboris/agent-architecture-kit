@@ -28,7 +28,7 @@ An arrow points from a module to what it may depend on. Dependencies point inwar
 
 ## Module kinds
 
-- **Domain.** The business model, the rules, the ports, and the middleware. It performs no I/O and uses no UI framework, database, or SDK. It depends only on utilities.
+- **Domain.** The business model, the rules, the ports, and the middleware. It performs no I/O and uses no UI framework, database, or SDK. It depends only on utilities and on pure libraries that the project allows, such as a validation library, and keeps those libraries out of what it exports.
 - **Use cases.** One module per slice. A use case carries out one operation for its slice: it loads what it needs through ports, lets domain rules decide, and saves or sends the result through ports. It depends on the domain and utilities.
 - **UI.** One module per slice: screens and view models in an app, request handlers in a service, commands in a tool. It turns input into use case calls and results into output. It depends on its own slice's use cases, the domain, shared UI, and utilities.
 - **Shared UI.** Presentation pieces that several slices use, such as components, styles, or HTTP response helpers. It holds no business types and depends only on utilities.
@@ -39,7 +39,7 @@ An arrow points from a module to what it may depend on. Dependencies point inwar
 - **Screens.** In an app with pages, a screen arranges the public UI of one or more slices on one page, such as a home page made of a list from one slice and a status box from another. It depends on the UI of slices, through each slice's public entry, and on shared UI. It calls no use cases and makes no decisions. The composition root maps routes to screens.
   - A screen connects slices. It passes a value from one slice's UI to another's, such as the current user's id, and fills a slot in one slice's UI with another slice's UI, such as how an author's name is shown. A slice's UI takes what it needs from another slice as such a parameter, never as an import.
   - A slice's UI links only to its own slice's pages. A link to another slice's page is a parameter that the screen fills.
-- **Shared domain.** In a repository with several apps, the model types, parse functions, and pure rules that more than one app uses. It holds no ports and no use cases, performs no I/O, and depends on nothing, so it runs unchanged in every app, a browser included.
+- **Shared domain.** In a repository with several apps, the model types, parse functions, and pure rules that more than one app uses. It holds no ports and no use cases, performs no I/O, and depends on no other module, so it runs unchanged in every app, a browser included. It may use a pure library that the project allows, if that library runs in every app too.
 
 ## Feature slices
 
