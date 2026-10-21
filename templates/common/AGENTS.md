@@ -14,7 +14,17 @@ The reference slice is **Notes**. Copy its structure when you add a slice, a use
 ## How to work here
 
 - Copy the structure of the reference slice, or of the closest existing code that follows it.
-- When the check reports a violation, apply the fix it names. Never change a gate file to make a check pass. `.github/CODEOWNERS` lists the gate files: `architecture.json`, the baseline, `check`, `tools/`, `.claude/`, `.github/`, the instruction files, the architecture docs, and the compiler, linter, and test runner settings. Changes to them need the owner.
+- When the check reports a violation, apply the fix it names. Never loosen a rule, silence the linter, or skip a test to make a check pass.
 - Use the names in `GLOSSARY.md` for business concepts, and add new concepts to it.
 - Every behavior change gets a test that fails without the change. A bug fix starts with a test that reproduces the bug.
 - End with a short report: what changed, what you could not verify, and follow-ups you noticed but did not do.
+
+## Gate files and merging
+
+- Change any file the task needs in your pull request, including docs, `README.md`, and gate files. Never hand the owner a patch to apply instead.
+- Gate files define the checks. Two kinds of change to them wait for the owner's approval:
+  - Any change to a file that `.github/CODEOWNERS` lists: `check`, `tools/`, `.claude/`, `.github/`, the instruction files, `docs/ARCHITECTURE.md` and the language guide, and the compiler, linter, and test runner settings.
+  - A change that loosens a rule in `architecture.json`, the baseline, or a `package.json`, or a new comment that silences the linter or skips a test. `python3 tools/gatecheck.py` lists them.
+- A stricter rule or a lower baseline needs no approval.
+- Put a change that waits for the owner in a pull request of its own, with the reason in its description, so other work does not wait on it.
+- A pull request may merge once `check` and `gates` pass on its current head, and an agent that did not write it has run the architecture-reviewer subagent on it and found no problems. Merge with a squash merge, and never bypass a required check or review.

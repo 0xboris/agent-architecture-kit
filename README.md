@@ -13,9 +13,10 @@ It works for Swift apps built from local packages, and for Go and TypeScript ser
 docs/ARCHITECTURE.md              the architecture, for agents and people (copied into each project)
 docs/architecture/<language>.md   the language rules for Swift, Go, and TypeScript
 tools/archcheck.py                the architecture check
+tools/gatecheck.py                finds the changes on a branch that loosen a rule
 tools/new.py                      creates projects and adopts existing ones (runs from the kit only)
 tools/agent-stop-check.sh         Claude Code Stop hook that runs ./check
-templates/common/                 AGENTS.md, CLAUDE.md, GLOSSARY.md, .claude/, CODEOWNERS
+templates/common/                 AGENTS.md, CLAUDE.md, GLOSSARY.md, .claude/, CODEOWNERS, the gates workflow
 templates/swift|go|typescript/    a working project with the Notes reference slice and its stack.md
 examples/                         pages that show the architecture in example projects (not copied into projects)
 ```
@@ -23,12 +24,12 @@ examples/                         pages that show the architecture in example pr
 Each project receives:
 
 - **The docs.** `docs/ARCHITECTURE.md`, its language guide, `docs/architecture/stack.md` for the project's libraries, and the generated module map.
-- **The tools.** `tools/archcheck.py`, the Stop hook script, and `./check`, the one command that verifies everything.
+- **The tools.** `tools/archcheck.py`, `tools/gatecheck.py`, the Stop hook script, and `./check`, the one command that verifies everything.
 - **The configuration.** `architecture.json` maps directories to module kinds and sets the rules for each kind, and `architecture-baseline.json` holds the violations you have accepted.
 - **Agent instructions.** `AGENTS.md`, which names the reference slice, a `CLAUDE.md` that imports it, and a `README.md` to fill in with what the project does.
 - **Claude Code integration in `.claude/`.** The Stop hook, a path-scoped rule that points agents to the docs, the `new-slice` and `new-port` checklists, and the `architecture-reviewer` subagent.
-- **Code owners.** `.github/CODEOWNERS` covers the gate files and the composition root.
-- **CI.** `.github/workflows/check.yml` runs `./check`.
+- **Code owners.** `.github/CODEOWNERS` covers the gate files that no tool can judge, such as `check` and `tools/`.
+- **CI.** `.github/workflows/check.yml` runs `./check`, and `.github/workflows/gates.yml` fails on a change that loosens a rule until the owner approves it.
 - **The Notes reference slice.** A small working feature with a domain rule, a port, middleware, a slice, an adapter, stubs, adapter tests against the real file system, and a composition test.
 
 ## Requirements
@@ -63,7 +64,7 @@ Then, in the new folder:
    - Delete the `ContentView.swift` and `<Name>App.swift` files that Xcode generated, and add `App/<Name>App.swift` to the app target.
    - Use File > Add Package Dependencies > Add Local to add `Packages/AppModules`, and link the `AppComposition` library to the app target.
    - Add an iOS build of the app to CI, as `docs/architecture/swift.md` describes.
-3. Commit, push, and set up branch protection on `main`: require pull requests, require code-owner reviews, and require the `check` workflow.
+3. Commit, push, and set up the ruleset on `main` that [Let agents merge](#let-agents-merge) describes.
 4. To use other libraries than the template's, follow "Changing a library" in `docs/architecture/stack.md`. Rewrite the Notes slice with them first, so agents copy the right patterns.
 5. Let agents use the Notes slice as their reference. Once your first real slice exists and follows the same patterns, delete the Notes slice, its tests, its wiring, and its glossary entries, and name the new slice as the reference in `AGENTS.md`. If the product itself has notes, its notes feature grows from the Notes slice, which stays the reference.
 
@@ -80,13 +81,41 @@ python3 path/to/kit/tools/new.py adopt go ~/Dev/legacy-service --owner @your-git
 1. **Map every directory to a kind.** Edit `modules` in `architecture.json` until `python3 tools/archcheck.py` reports no unmapped file. A module path is a directory; `{"path": "."}` maps the repository root, for example a Go `main.go`. Pick the kind by what the code does today: handlers are `ui`, database code is `adapter`, and models and business logic are `domain`.
 2. **Accept what exists.** Run `python3 tools/archcheck.py --write-baseline`. From now on the check fails only on new violations.
 3. **Wire up `./check`.** Make it run your real build and tests. If you got `check.kit`, merge its architecture steps into your existing check.
-4. **Turn on the gates.** Add `@AGENTS.md` as the first line of an existing `CLAUDE.md`, commit `.claude/`, set the owner in `CODEOWNERS`, and enable branch protection as for a new project.
+4. **Turn on the gates.** Add `@AGENTS.md` as the first line of an existing `CLAUDE.md`, commit `.claude/`, set the owner in `CODEOWNERS` and in `.github/workflows/gates.yml`, and set up the ruleset as for a new project.
 5. **Describe the stack and pick a reference.** Rewrite `docs/architecture/stack.md` for the project's libraries, and allow them per kind in `architecture.json`. Name a reference slice in `AGENTS.md`: the existing slice that best follows the architecture, or one you rebuild in that shape, using the kit's Notes slice as the model.
 6. **Write the glossary.** List the business concepts the code already uses, one heading each.
 7. **Put new work in the new shape.** New capabilities become slices in the shape of the reference slice. New rules go into the domain. New I/O goes behind ports.
 8. **Fix old code as you touch it.** When a change touches a module with violations, fix them in a separate commit and run `--write-baseline` to lower the counts. The baseline only ever goes down.
 
 The language guides describe the template layout. In a project with a different layout, either move toward the template layout over time, or keep the existing layout mapped in `architecture.json` and name as the reference the slice that follows the architecture best.
+
+## Let agents merge
+
+Agents can merge their own pull requests without you. Three things keep the architecture intact:
+
+- `./check` fails on code that breaks a rule, and the Stop hook and CI both run it.
+- The gates workflow fails on a change that loosens a rule, until you approve the pull request.
+- An agent that did not write the change runs the `architecture-reviewer` subagent on it before it merges. That review is a rule in `AGENTS.md`; nothing on GitHub enforces it.
+
+Set up a ruleset for `main` under Settings > Rules > Rulesets:
+
+1. Require a pull request before merging, with 0 required approvals and "Require review from Code Owners" turned on. A pull request that touches a file in `CODEOWNERS` then needs you, and every other one needs nobody.
+2. Require the status checks `check` and `gates`, and require branches to be up to date before merging, so the checks ran on the code that lands. A merge queue does the same with fewer rebases.
+3. Block force pushes and deletions.
+4. Leave the agents' account or GitHub App off the bypass list. You may add yourself.
+
+In the repository's general settings, allow squash merging and auto-merge, so an agent can arm a merge that waits for the checks. Agents push under their own account or a GitHub App, as [Requirements](#requirements) says.
+
+These changes wait for you:
+
+- Every change to `check`, `tools/`, `.claude/`, `.github/`, `AGENTS.md`, `CLAUDE.md`, `docs/ARCHITECTURE.md`, the language guide, and the compiler, linter, and test runner settings. `CODEOWNERS` sends them to you.
+- A change that loosens a rule in `architecture.json`, the baseline, or a `package.json`, and a new comment that silences the linter or the type checker or skips a test. The gates workflow fails and its log lists each one. Your approval counts for the commit you approved, so a later push needs a new one. Run `python3 tools/gatecheck.py` to see the same list locally.
+
+Everything else merges without you: feature code, the composition root, `README.md`, `docs/architecture/stack.md` and other docs, new dependencies, a stricter rule, and a lower baseline. The check enforces the shape of the composition root, and `architecture.json` decides where each library may be imported.
+
+The kit's `.claude/settings.json` blocks no file. If a project's copy has `permissions.deny` rules for docs or gate files, remove them. Agents then hand you patches instead of opening pull requests, and the rules above already cover those files.
+
+This setup fits workflows that run many agents in parallel and let them land their own pull requests, such as the autopilot playbooks in [pstack](https://github.com/cursor/plugins/tree/main/pstack). Their independent verifier is the second agent above.
 
 ## Day to day
 
@@ -96,9 +125,8 @@ Agents read `AGENTS.md` at the start of each task and the architecture docs when
 
 Your review stays small:
 
-- **Diffs to gate files.** `CODEOWNERS` sends you every change to `architecture.json`, the baseline, `check`, `tools/`, `.claude/`, `.github/`, and the instruction files. An agent that weakens a check shows up here.
-- **Diffs to the composition root.** Legitimate changes are a few lines of wiring. Anything larger is feature code in the wrong place.
-- **Ports and stored formats.** New ports, renamed stored or sent fields, and migrations deserve a careful look, because no test catches a format that only breaks old data.
+- **Pull requests that wait for you.** Only changes to the gate files and changes that loosen a rule wait for your approval, as [Let agents merge](#let-agents-merge) lists. An agent that weakens a check shows up here. Agents put these changes in pull requests of their own, so feature work does not wait on them.
+- **What merged.** Read merged pull requests when you choose. Look hardest at new ports, renamed stored or sent fields, and migrations, because no test catches a format that only breaks old data. When something wrong merged, change the tooling so it cannot merge again, as below.
 
 When agents keep making the same mistake, improve the tooling instead of adding prose. Preferred fixes, in order:
 
@@ -106,7 +134,15 @@ When agents keep making the same mistake, improve the tooling instead of adding 
 2. A better reference slice.
 3. A sentence in `docs/ARCHITECTURE.md`, only when nothing else can carry it.
 
-Upgrade a project to a newer kit by copying `tools/archcheck.py`, `tools/agent-stop-check.sh`, `docs/ARCHITECTURE.md`, and the project's language guide from `docs/architecture/` out of the kit, then running `./check`. The kit owns these files, so the project does not edit them. Read the diff of the docs: a new rule may need a change in the project. Projects created before 2026-10-15 also have `tools/new.py`, which they can delete: new code now copies the reference slice.
+Upgrade a project to a newer kit by copying `tools/archcheck.py`, `tools/gatecheck.py`, `tools/agent-stop-check.sh`, `docs/ARCHITECTURE.md`, and the project's language guide from `docs/architecture/` out of the kit, then running `./check`. The kit owns these files, so the project does not edit them. Read the diff of the docs: a new rule may need a change in the project. Projects created before 2026-10-15 also have `tools/new.py`, which they can delete: new code now copies the reference slice.
+
+Projects created before 2026-10-21 send every gate file to the owner, including the composition root and `package.json`. To let agents merge:
+
+1. Copy `templates/common/.github/workflows/gates.yml` to the project and replace `__OWNER__` with your GitHub user.
+2. Replace `.github/CODEOWNERS` with the template's, filling in the owner, the language guide, and the settings files that `TOOL_CONFIG_PATHS` in `tools/new.py` lists. Keep the project's own additions, such as a contract file.
+3. Replace "Gate files and merging" and the bullet about gate files in `AGENTS.md` with the template's.
+4. Remove any `permissions.deny` rules for docs or gate files from `.claude/settings.json`.
+5. Set up the ruleset in [Let agents merge](#let-agents-merge).
 
 TypeScript projects created before 2026-10-19 have no linter. To add it:
 
@@ -201,6 +237,12 @@ Retested on Linux on 2026-10-19 with Node 24.22, TypeScript 7.0.2, oxlint 1.88.0
 - **Several apps.** The test project with an API, a React web app, and a shared domain moved from TypeScript 6 and ESLint to TypeScript 7 and oxlint, and `./check` passes: the contract, lint, type checks of every package, Vitest, and the Vite build. Lint fails on an assertion in a slice's `.tsx` file and on a list item without a key, and allows assertions in the shared domain and in tests. openapi-typescript, which needs TypeScript's JavaScript API, runs with TypeScript 5.9 from a package of its own and generates the same client. The hooks rule runs only on the React app, because the API's `useCases()` wiring helper is not a hook.
 - **A fresh agent.** Given only the kit and the stack, a new agent built an API, a web app, and a shared domain with notes and users. It arrived at the same design, with an author slot that a screen fills and the edit rule in the shared domain, and `./check` passed. The gaps it reported are fixed: the steps from one app to several, an `architecture.json` for several apps, the React hooks rule, the shared domain's tests, `openapi.ts` in `allowedFiles`, and the fix message for an import between slices whose kinds have project names, such as `web-ui`.
 
+Retested on Linux on 2026-10-21 with Python 3.11 and Go 1.24, after agents became able to merge their own pull requests:
+
+- **Gate check.** `tools/gatecheck.py` reports each of these and exits 1: a kind that may import more, a package allowed in the domain, a higher `maxLines`, a pattern removed from a call set, a new `testFiles` pattern, a baseline entry that went up, a changed `scripts` or `imports` in `package.json`, a removed `oxlint-tsgolint`, and added `@ts-ignore`, `eslint-disable`, and `test.skip(` lines. It passes a stricter kind, a lower `maxLines`, a new banned call, a new dependency, a version bump, and changes to `README.md`, `stack.md`, and the composition root. It compares with the merge base, so a base branch that moved on adds nothing.
+- **Gates workflow.** Its shell step, run with a stub `gh`, passes when the owner's last review of the head is an approval, and fails with no review, a dismissed one, or one that requests changes.
+- **New projects.** `init go` passes `./check`, and `init typescript` and `init go` write the new `CODEOWNERS` and `gates.yml` with the owner filled in.
+
 Not tested:
 
 - **A template for several apps.** `init` still creates one app. "From one app to several" in `docs/architecture/typescript.md` gives the steps and an `architecture.json` for an API, a web app, and a shared domain.
@@ -208,7 +250,7 @@ Not tested:
 - **The Swift template after 2026-10-15.** Its new `StubNoteStore` and the rewritten tests have not been compiled. Run `./check` on macOS before relying on them.
 
 - **Claude Code in a real session.** Nobody has watched it load the Stop hook, the skills, the subagent, or the path-scoped rule. The formats follow the Claude Code documentation as of 2026-10-14.
-- **GitHub.** The GitHub Actions workflows were not run, and `CODEOWNERS` enforcement was not tried.
+- **GitHub.** The GitHub Actions workflows were not run, and `CODEOWNERS` enforcement was not tried. Nobody has confirmed that a run of the gates workflow started by a review replaces the failed `gates` check on the pull request, or that a ruleset with 0 approvals still requires code-owner review.
 - **The Xcode app.** The project steps for Swift and an iOS build of the app.
 - **Larger code.** Adoption in a real, larger codebase, and the check's speed on a large repository.
 - **Other setups.** TypeScript path aliases, TypeScript frontends or frameworks such as Express or Fastify, Core Data or SwiftData adapters, and Windows.

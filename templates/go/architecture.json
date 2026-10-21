@@ -1,6 +1,6 @@
 // The module map and the import rules that tools/archcheck.py enforces.
-// docs/ARCHITECTURE.md explains the kinds. This is a gate file: change it
-// on purpose, in its own commit, with the owner's approval.
+// docs/ARCHITECTURE.md explains the kinds. This is a gate file: a change that
+// loosens a rule needs the owner's approval, and tools/gatecheck.py finds it.
 {
   "language": "go",
   "sourceRoots": ["."],

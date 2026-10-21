@@ -75,7 +75,7 @@ The linter runs type-aware rules, which need type information from the compiler.
 - **No `any` flowing into typed values.** The result of `JSON.parse` or `response.json()` is `any`. Production code parses it with a parse function or a schema; tests may assert its type.
 - **Every promise is awaited or handled.** A stub that only returns a value is written as `() => Promise.resolve(value)` or `() => Promise.reject(error)`, not as an `async` function without `await`.
 - **Generated code is not linted.** Exclude a generated file, such as an API client, in the linter's settings, and regenerate it instead of editing it.
-- **Fix a lint finding instead of silencing it.** A disable comment needs the owner's approval, like a change to the linter's settings.
+- **Fix a lint finding instead of silencing it.** A disable comment needs the owner's approval, like a change to the linter's settings. `tools/gatecheck.py` finds each new one.
 
 TypeScript 7.0's npm package holds the compiler but no JavaScript API: `import ts from 'typescript'` gives only its version. A tool that calls that API, such as a code generator that prints TypeScript, fails with TypeScript 7. Give such a tool a workspace package of its own that depends on the tool and on the TypeScript version that the tool's peer dependency asks for, such as 5.9 for openapi-typescript 7, and run it from there. A package manager resolves a tool's `typescript` peer dependency from the package that depends on the tool, so the rest of the repository keeps TypeScript 7. Tools that only strip types, such as Node, Vite, and Vitest, work with any version.
 
@@ -144,7 +144,7 @@ apps/web/src/adapters/api/       the generated API client and the adapter that p
 1. Move `src/` and the app's `package.json` and `tsconfig.json` into `apps/api/`. Add `pnpm-workspace.yaml` with `apps/*` and `packages/*`, a root `package.json` for the tools that run on every package, such as the linter and TypeScript, and a `tsconfig.base.json` that each package extends.
 2. Create `packages/domain` for the rules that more than one app needs, and move them there from the API's domain. Rewrite their imports to the package name.
 3. Map every app in `architecture.json`, as in the example below. Test files and configuration files now sit below the root, so their patterns need `**/` or the app's directory.
-4. Change `.github/CODEOWNERS`: settings files anywhere, such as `**/package.json`, `**/tsconfig*.json`, and `**/vite.config.*`, the contract `/apps/api/openapi.json`, and every composition root, `/apps/*/src/app/`. Change the `paths` in `.claude/rules/architecture.md` to `apps/**/src/**` and `packages/**/src/**`.
+4. Change `.github/CODEOWNERS`: settings files anywhere, such as `**/tsconfig*.json` and `**/vite.config.*`, and the contract `/apps/api/openapi.json`. `tools/gatecheck.py` already checks every `package.json`. Change the `paths` in `.claude/rules/architecture.md` to `apps/**/src/**` and `packages/**/src/**`.
 5. Add the contract step to `./check`, run the type checks and tests of every package (`pnpm --recursive run typecheck`), and build each client.
 6. Describe the workspace in `docs/architecture/stack.md`. pnpm 10 and later run no install script of a dependency unless `allowBuilds` in `pnpm-workspace.yaml` allows it, and may refuse a version released in the last day; note what the project allows and why.
 

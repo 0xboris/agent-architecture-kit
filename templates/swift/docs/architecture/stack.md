@@ -1,6 +1,6 @@
 # Stack
 
-The frameworks this project uses, and how the reference slice uses them. `docs/architecture/swift.md` holds the rules that hold for any framework. This file belongs to the project: when the project changes a framework, it updates this file in the same change. Like everything in `docs/architecture/`, it is a gate file, so changes need the owner's review.
+The frameworks this project uses, and how the reference slice uses them. `docs/architecture/swift.md` holds the rules that hold for any framework. This file belongs to the project: when the project changes a framework, it updates this file in the same change. It is not a gate file: `architecture.json` sets which libraries each kind may use, and the gates workflow sends a library newly allowed in a kind to the owner.
 
 ## UI
 

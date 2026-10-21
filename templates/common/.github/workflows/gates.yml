@@ -1,0 +1,50 @@
+# Fails while a pull request loosens a rule, until an owner approves its current head.
+# tools/gatecheck.py decides what loosens a rule. Make `gates` a required check, so that
+# agents can merge every other pull request on their own.
+# OWNERS lists GitHub users, separated by spaces. A team does not work here.
+name: gates
+
+on:
+  pull_request:
+  pull_request_review:
+    types: [submitted, dismissed]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Find changes that loosen a rule
+        env:
+          BASE: origin/${{ github.event.pull_request.base.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR: ${{ github.event.pull_request.number }}
+          OWNERS: __OWNER__
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          python3 tools/gatecheck.py "$BASE"
+          status=$?
+          set -e
+          [ "$status" -eq 0 ] && exit 0
+          [ "$status" -eq 1 ] || exit "$status"
+          # An approval counts only for the commit it was given on, so a later push needs a new one.
+          for owner in $OWNERS; do
+            login="${owner#@}"
+            state=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/reviews" \
+              --jq ".[] | select(.user.login == \"$login\" and .commit_id == \"$HEAD_SHA\") | .state" \
+              | grep -v COMMENTED | tail -n 1)
+            if [ "$state" = "APPROVED" ]; then
+              echo "$owner approved $HEAD_SHA, so these changes may merge."
+              exit 0
+            fi
+          done
+          echo "These changes wait for an approval of $HEAD_SHA from one of: $OWNERS"
+          exit 1

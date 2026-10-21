@@ -189,9 +189,9 @@ When the code needs something its module may not import:
   - imports between apps, and imports into a module that bypass its public entry
   - cycles
 - **The baseline** (`architecture-baseline.json`) records violations that existed before the rules were adopted. The check fails only when a change adds a violation. When code is fixed, the baseline is lowered.
-- **Gate files** define the checks: `architecture.json`, the baseline, `check`, `tools/`, `.claude/`, `.github/`, and the instruction files. A code-owner rule requires the owner's review for every change to them. Never change a gate file to make a check pass.
+- **Gate files** define the checks: `architecture.json`, the baseline, `check`, `tools/`, `.claude/`, `.github/`, and the instruction files. A change that loosens a rule waits for the owner. A code-owner rule sends every change to the files that no tool can judge, such as `check` and `tools/`, and `tools/gatecheck.py` finds the changes that loosen a rule in `architecture.json`, the baseline, and `package.json`. Never change a gate file to make a check pass.
 - **The Stop hook** runs `./check` before an agent finishes a task that changed files.
-- **The architecture reviewer** subagent checks the judgment calls in this document before a pull request is opened.
+- **The architecture reviewer** subagent checks the judgment calls in this document before a pull request is opened. Before the pull request merges, an agent that did not write the change runs it again.
 
 ## Changing code safely
 

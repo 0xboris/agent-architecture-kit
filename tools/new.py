@@ -38,19 +38,12 @@ def fill(text, values):
 
 # ----------------------------------------------------------- init, adopt
 
-COMPOSITION_PATHS = {
-    "swift": ["/App/", "/Packages/AppModules/Sources/AppComposition/"],
-    "go": ["/cmd/", "/internal/app/"],
-    "typescript": ["/src/app/"],
-}
-
-
 # Compiler, linter, and test runner settings. An agent could weaken a check by
-# changing them, so they are gate files too.
+# changing them, so they are gate files too. tools/gatecheck.py judges package.json.
 TOOL_CONFIG_PATHS = {
     "swift": ["/.swiftlint.yml"],
-    "go": ["/go.mod", "/.golangci.yml", "/.golangci.yaml"],
-    "typescript": ["/package.json", "/tsconfig*.json", "/.oxlintrc.json", "/oxlint.config.*", "/eslint.config.*", "/vitest.config.*", "/pnpm-workspace.yaml", "/.npmrc"],
+    "go": ["/.golangci.yml", "/.golangci.yaml"],
+    "typescript": ["/tsconfig*.json", "/.oxlintrc.json", "/oxlint.config.*", "/eslint.config.*", "/vitest.config.*", "/pnpm-workspace.yaml", "/.npmrc"],
 }
 
 
@@ -82,7 +75,7 @@ def copy_tree(source, dest, values, overwrite, report):
 def copy_kit_files(kit, dest, language, values, overwrite, report):
     copy_tree(os.path.join(kit, "templates", "common"), dest, values, overwrite, report)
     os.makedirs(os.path.join(dest, "tools"), exist_ok=True)
-    for tool in ("archcheck.py", "agent-stop-check.sh"):
+    for tool in ("archcheck.py", "gatecheck.py", "agent-stop-check.sh"):
         target = os.path.join(dest, "tools", tool)
         shutil.copy2(os.path.join(kit, "tools", tool), target)
         os.chmod(target, 0o755)
@@ -96,7 +89,6 @@ def placeholder_values(language, args):
     return {
         "__LANGUAGE__": language,
         "__OWNER__": args.owner,
-        "__COMPOSITION_LINES__": "\n".join(f"{path:<30}{args.owner}" for path in COMPOSITION_PATHS[language]),
         "__TOOL_CONFIG_LINES__": "\n".join(f"{path:<30}{args.owner}" for path in TOOL_CONFIG_PATHS[language]),
         "__APP_NAME__": args.name,
         "__PROJECT_NAME__": separated(args.name, "-"),
@@ -132,8 +124,8 @@ def init(args):
     steps.append("Describe what the project does in README.md.")
     steps.append("Run ./check.")
     if args.owner == "@OWNER":
-        steps.append("Replace @OWNER in .github/CODEOWNERS with your GitHub user or team.")
-    steps.append("Commit, and turn on branch protection with required code-owner reviews and the check workflow.")
+        steps.append("Replace @OWNER in .github/CODEOWNERS and .github/workflows/gates.yml with your GitHub user.")
+    steps.append("Commit, and set up the ruleset on main that \"Let agents merge\" in the kit's README describes.")
     steps.append("Once your first real slice follows the patterns of the Notes slice, delete Notes and name the new slice as the reference in AGENTS.md.")
     for step in steps:
         print(f"  - {step}")

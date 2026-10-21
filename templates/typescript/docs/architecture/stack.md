@@ -1,6 +1,6 @@
 # Stack
 
-The libraries this project uses, and how the reference slice uses them. `docs/architecture/typescript.md` holds the rules that hold for any library. This file belongs to the project: when the project changes a library, it updates this file in the same change. Like everything in `docs/architecture/`, it is a gate file, so changes need the owner's review.
+The libraries this project uses, and how the reference slice uses them. `docs/architecture/typescript.md` holds the rules that hold for any library. This file belongs to the project: when the project changes a library, it updates this file in the same change. It is not a gate file: `architecture.json` sets which libraries each kind may use, and the gates workflow sends a library newly allowed in a kind to the owner.
 
 The kit's template uses Node's built-in modules only, plus TypeScript 7 and oxlint for checking.
 

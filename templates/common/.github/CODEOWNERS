@@ -1,6 +1,7 @@
-# Gate files: they define the checks, so changes need the owner's review.
-/architecture.json            __OWNER__
-/architecture-baseline.json   __OWNER__
+# Gate files that no tool can judge: every change to them needs the owner's review.
+# They run the checks, set what agents read as rules, or configure the compiler and linter.
+# tools/gatecheck.py judges architecture.json, the baseline, and package.json instead, and
+# the gates workflow sends only the changes that loosen a rule to the owner.
 /check                        __OWNER__
 /tools/                       __OWNER__
 /.claude/                     __OWNER__
@@ -8,13 +9,7 @@
 /AGENTS.md                    __OWNER__
 /CLAUDE.md                    __OWNER__
 /docs/ARCHITECTURE.md         __OWNER__
-/docs/architecture/           __OWNER__
+/docs/architecture/__LANGUAGE__.md __OWNER__
 
 # Compiler, linter, and test runner settings.
 __TOOL_CONFIG_LINES__
-
-# The module map is generated, so it needs no owner.
-/docs/architecture/modules.md
-
-# The composition root: legitimate changes are a few lines of wiring, so they are cheap to review.
-__COMPOSITION_LINES__
