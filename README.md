@@ -124,7 +124,7 @@ TypeScript projects created before 2026-10-19 have no linter. To add it:
 
 A workflow plugin decides how an agent works: which steps it takes, which subagents it spawns, and how it reviews and lands its pull requests. [pstack](https://github.com/cursor/plugins/tree/main/pstack) is one. The kit decides where code goes and fails the check when code goes elsewhere. The two work together, with the kit's rules on top.
 
-The kit serves its own copy of pstack with ten edits, which `plugins/README.md` lists. Read literally, a few pstack rules remove layers that the architecture requires, replace the stubs that its testing rules prescribe, or tell the agent to fix a failing check itself. Each edit scopes one such rule to what the repository's architecture docs allow, so the agent reads one set of rules instead of two that disagree. The edits name no part of the kit, and `plugins/README.md` describes how to propose them upstream. Once upstream has them, enable `pstack@cursor-plugins` instead.
+The kit serves its own copy of pstack with twelve edits, which `plugins/README.md` lists. Read literally, a few pstack rules remove layers that the architecture requires, replace the stubs that its testing rules prescribe, or tell the agent to fix a failing check itself. Ten edits scope each such rule to what the repository's architecture docs allow, so the agent reads one set of rules instead of two that disagree. The other two let pstack work with GitHub in Claude Code cloud sessions, as described below. The edits name no part of the kit, and `plugins/README.md` describes how to propose them upstream. Once upstream has them, enable `pstack@cursor-plugins` instead.
 
 To enable the kit's copy for everyone who works on a project, add this to `.claude/settings.json`. It is a gate file, so commit the change yourself.
 
@@ -144,6 +144,8 @@ The architecture holds in a pstack session for these reasons:
 - **The kit's copy of pstack.** Its rules keep the layers that `docs/ARCHITECTURE.md` requires, and it treats an owner's gate as a gate, not as a tooling failure.
 - **The precedence section.** The "Skills and plugins" section in `AGENTS.md` covers what no edit does: a failing check is a finding in the code, and rules and checks that a workflow writes are gate changes. Claude Code loads it in every session and in pstack's subagents.
 - **The reviewer.** The `architecture-reviewer` subagent runs before each pull request, next to pstack's own reviews.
+
+A Claude Code cloud session blocks GitHub's GraphQL API, so every `gh pr` command fails there, and so does pstack's PR watcher. In the kit's copy, pstack detects a cloud session and uses the GitHub MCP tools instead. In place of the watcher, it subscribes the session to each PR, so CI results, reviews, and the merge wake the session. The Orchestrate playbook still needs a session outside the cloud.
 
 The Stop hook runs only when the main session finishes. pstack's subagents run `./check` because `AGENTS.md` tells them to, and the main session's Stop hook checks their combined work. If the main session ends a turn while subagents still edit files, the hook can report failures in their unfinished work.
 
@@ -263,6 +265,12 @@ Retested on Linux on 2026-10-21, after the port check, the gate guard, and the k
 - **Port check.** `init` creates TypeScript, Go, and Swift projects whose architecture check passes. A port used in a slice's UI fails in all three, also as a qualified name such as `domain.NoteStore` in Go. A port named in a comment or a string passes. The baseline accepts the violation. A UI kind with `forbidPorts` and no `portFiles` is a configuration error. Swift was checked with the architecture check only, without a Swift build.
 - **Gate guard.** I ran the script directly in a TypeScript and a Go project. It passes wiring changes in the composition root, a new slice, a glossary entry, and the generated module map. It fails on `architecture.json`, `package.json`, `go.mod`, and a deleted `.claude/settings.json`. The workflow step itself has not run on GitHub yet.
 - **The kit's copy of pstack.** `tools/vendor_pstack.py` applied all ten edits to cursor/plugins at commit 190d287, and upstream's generator check and plugin validator pass on the result. `claude plugin validate` passes on the marketplace and the plugin, and Claude Code installs `pstack@agent-architecture-kit` from a local clone of the kit.
+
+Retested on Linux on 2026-10-21, in a Claude Code cloud session, after pstack's adapter learned to reach GitHub there:
+
+- **GitHub in a cloud session.** `gh pr view`, `gh pr list`, and `gh api graphql` fail with HTTP 403, and `gh api` REST paths work. The MCP tools in the adapter's table return the fields it names: `get` gives `merged`, `merged_at`, `base.ref`, `head.sha`, and `mergeable_state`, and `get_check_runs` and `get_review_comments` answer. `list_pull_requests` reports `merged: false` for a merged PR, which the table notes.
+- **The edits.** `tools/vendor_pstack.py` applied all twelve edits to cursor/plugins at commit 190d287. Upstream's generator check, plugin validator, and docs check pass on the whole patch and on each of its two halves. `claude plugin validate` passes on the plugin.
+- **Not run.** No pstack playbook has run in a cloud session, so the PR subscription in place of the watcher has not been tried in a real babysit.
 
 Not tested:
 
