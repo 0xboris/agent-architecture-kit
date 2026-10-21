@@ -155,6 +155,7 @@ apps/web/src/adapters/api/       the generated API client and the adapter that p
   "testFiles": ["**/*.test.ts", "**/*.test.tsx", "**/*.testing.ts", "**/*.testing.tsx"],
   "ignore": ["*.config.ts", "*.config.js", "apps/*/*.config.ts"],
   "glossary": "GLOSSARY.md",
+  "portFiles": ["apps/*/src/domain/ports.ts"],
   "typescript": {"aliases": {"@acme/domain": "packages/domain/src"}},
   "modules": [
     {"path": "packages/domain/src", "kind": "shared-domain", "name": "shared/domain"},
@@ -183,11 +184,12 @@ apps/web/src/adapters/api/       the generated API client and the adapter that p
     // mayImport where they use the shared rules; composition with "openapi.ts" in allowedFiles
     "web-ui": {
       "mayImport": ["usecases@same-slice", "shared-domain", "domain", "web-shared-ui"],
+      "forbidPorts": true,
       "external": {"allow": ["@react"]},
       "forbiddenCalls": ["@io"],
       "publicEntry": ["index.ts"]
     },
-    "screen": {"mayImport": ["web-ui", "web-shared-ui"], "external": {"allow": ["react", "@tanstack/react-router"]}, "forbiddenCalls": ["@io"]},
+    "screen": {"mayImport": ["web-ui", "web-shared-ui"], "forbidPorts": true, "external": {"allow": ["react", "@tanstack/react-router"]}, "forbiddenCalls": ["@io"]},
     "web-shared-ui": {"mayImport": [], "external": {"allow": ["react"]}, "forbiddenCalls": ["@io"], "bannedTerms": "glossary"},
     "web-composition": {
       "mayImport": ["*"],

@@ -3,7 +3,8 @@
 
 Reads architecture.json, maps every source file to a module, and checks
 the import rules, banned calls, glossary terms in modules without business
-meaning, and the shape of the composition root.
+meaning, ports used outside the kinds that may use them, and the shape of the
+composition root.
 
 Usage:
   python3 tools/archcheck.py                      check against the baseline
@@ -34,6 +35,12 @@ CONTROL_FLOW = {
     "typescript": ["if", "for", "while", "switch", "catch"],
 }
 DOCS = "docs/ARCHITECTURE.md"
+# Declarations in the files that portFiles lists. Each match names one port.
+PORT_DECLARATIONS = {
+    "swift": r"\bprotocol\s+([A-Za-z_]\w*)",
+    "go": r"(?m)(?:\btype\s+|^\s+)([A-Za-z_]\w*)\s+interface\s*\{",
+    "typescript": r"\binterface\s+([A-Za-z_]\w*)",
+}
 
 
 class ConfigError(Exception):
@@ -294,6 +301,16 @@ class Project:
                         terms.append(" ".join(words))
         return terms
 
+    def port_names(self):
+        """The ports declared in the files that portFiles lists, by name."""
+        patterns = self.config.get("portFiles", [])
+        names = set()
+        for rel in self.production_files:
+            if matches_any(rel, patterns):
+                clean = strip_source(self.read(rel), self.language, keep_strings=False)
+                names.update(re.findall(PORT_DECLARATIONS[self.language], clean))
+        return sorted(names)
+
     # ----------------------------------------------------------- imports
 
     def imports(self, rel, code):
@@ -468,6 +485,10 @@ def external_allowed(project, kind_config, name):
 def check(project):
     violations = []
     terms = project.glossary_terms()
+    ports = project.port_names()
+    for kind, kind_config in project.kinds.items():
+        if kind_config.get("forbidPorts") and not project.config.get("portFiles"):
+            raise ConfigError(f"architecture.json: kind '{kind}' sets forbidPorts, but 'portFiles' lists no files")
     graph = defaultdict(set)
 
     for rel in project.unmapped:
@@ -482,6 +503,7 @@ def check(project):
         for entry in kind_config.get("forbiddenCalls", []):
             calls.extend(lookup_set(project, "forbiddenCallSets", entry) if is_set_reference(entry) else [entry])
         banned_terms = terms if kind_config.get("bannedTerms") == "glossary" else kind_config.get("bannedTerms", [])
+        forbidden_ports = ports if kind_config.get("forbidPorts") else []
         composition = kind_config.get("composition")
         total_lines = 0
 
@@ -551,6 +573,15 @@ def check(project):
                         "term", f"term:{module.name}:{term}", rel, number,
                         f"{module.label()} has no business meaning, but uses the glossary term '{term}'.",
                         "Move business code into the domain or into a slice."))
+
+            for port in forbidden_ports:
+                for m in re.finditer(r"(?<![\w$])" + re.escape(port) + r"(?![\w$])", clean):
+                    violations.append(Violation(
+                        "port", f"port:{module.name}->{port}", rel, line_of(clean, m.start()),
+                        f"{module.label()} uses the port {port}. A {module.kind} module reaches ports only "
+                        "through its slice's use cases.",
+                        "Call one of the slice's use cases, or add a use case in the shape of the reference slice "
+                        "that AGENTS.md names. Use cases stay even when they only call one port."))
 
             if composition:
                 inner = rel[len(module.path) + 1:] if module.path else rel
@@ -628,7 +659,7 @@ def module_map(project):
         lines.append(f"## {kind}")
         lines.append("")
         allowed = describe_allowed(project.kinds[kind])
-        lines.append(f"May import: {allowed}.")
+        lines.append(f"May import: {allowed}." + (" Uses no ports." if project.kinds[kind].get("forbidPorts") else ""))
         lines.append("")
         for m in sorted(members, key=lambda m: m.name):
             slice_note = (f", app {m.app}" if m.app else "") + (f", slice {m.slice}" if m.slice else "")

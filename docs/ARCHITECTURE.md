@@ -66,6 +66,8 @@ Each rule exists once, under the name that `GLOSSARY.md` gives the concept. A co
 
 A use case makes no business decision. If you write an `if` about business meaning in a use case, it belongs in a domain rule that the use case calls.
 
+A use case stays even when it only calls one port. The UI reaches ports only through its slice's use cases, and the next business step of the operation has an obvious place.
+
 Orchestration may repeat across slices. A manual entry, an import, and a scheduled job may each load, validate, and save a transaction in their own use case. That is acceptable, because the knowledge sits in the rules and the rules are shared.
 
 Watch for steps that must happen on every path. If changing a step would force every path to change the same way, it is not orchestration. It belongs in a domain rule, a port method, or middleware, where the next path cannot forget it.
@@ -79,6 +81,7 @@ When code needs something from outside the process, the domain declares a port a
 - Every dependency arrives through a constructor or a parameter. There are no singletons, global registries, or service locators, so an agent can see what a piece of code depends on by reading it.
 - Each third-party library that performs I/O sits behind one adapter.
 - Add an interface only at a module boundary or to isolate something slow or nondeterministic. Inside a module, use concrete types.
+- A port stays even when it has one adapter. The stubs in tests are its second implementation, and the port keeps the adapter's types out of the domain.
 - A port's results form a closed set of cases, such as a union of outcomes or a result with a closed set of errors. Callers and their tests can then handle every case, and the compiler shows every caller that misses a new one.
 
 ## Middleware
@@ -94,6 +97,8 @@ Four conditions keep middleware safe.
 2. Writes that must succeed together happen in one port call or one transaction.
 3. Middleware sees writes, not intent. When intent matters, the composition root applies the middleware only to the slices with that intent. When the decision depends on the data, such as an alert only for today's transactions, a domain rule decides.
 4. The composition test covers each choice that matters. Unit tests of a slice build its use cases directly and never see the wiring.
+
+Middleware stays even when it passes most calls through unchanged. The step it adds is the reason it exists.
 
 Before adding middleware, ask whether the data needs updating at all. A total that can be computed from stored data when it is read needs no middleware to keep it in sync.
 
@@ -187,9 +192,11 @@ When the code needs something its module may not import:
   - glossary terms in utilities and shared UI
   - the shape of the composition root
   - imports between apps, and imports into a module that bypass its public entry
+  - ports used in UI, which reaches them only through use cases
   - cycles
 - **The baseline** (`architecture-baseline.json`) records violations that existed before the rules were adopted. The check fails only when a change adds a violation. When code is fixed, the baseline is lowered.
 - **Gate files** define the checks: `architecture.json`, the baseline, `check`, `tools/`, `.claude/`, `.github/`, and the instruction files. A code-owner rule requires the owner's review for every change to them. Never change a gate file to make a check pass.
+- **The gate guard** (`tools/gateguard.py`) runs in CI on pull requests into any branch other than main, such as a feature branch, and fails when one changes a gate file. Gate changes go into their own pull request against main, where the owner reviews them.
 - **The Stop hook** runs `./check` before an agent finishes a task that changed files.
 - **The architecture reviewer** subagent checks the judgment calls in this document before a pull request is opened.
 

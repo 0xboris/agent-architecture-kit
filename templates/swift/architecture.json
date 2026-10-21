@@ -7,6 +7,7 @@
   "testFiles": ["**/Tests/**"],
   "ignore": ["**/Package.swift"],
   "glossary": "GLOSSARY.md",
+  "portFiles": ["Packages/AppModules/Sources/Domain/Ports/*.swift"],
 
   "modules": [
     {"path": "App", "kind": "composition", "name": "App"},
@@ -33,6 +34,7 @@
     },
     "ui": {
       "mayImport": ["usecases@same-slice", "domain", "shared-ui", "utilities"],
+      "forbidPorts": true,
       "external": {"allow": ["SwiftUI", "Foundation", "Observation"]},
       "forbiddenCalls": ["@io"]
     },

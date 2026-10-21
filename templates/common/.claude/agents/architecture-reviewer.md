@@ -21,6 +21,6 @@ Answer each question for the change. Quote the file and line for every problem.
 10. Does each use case test give its stubs every result the port can return, so that every path runs? Are the stubs typed against the port?
 11. Is each new or changed adapter tested against the real system, for each case its port promises?
 12. Are business concepts named as in `GLOSSARY.md`?
-13. Does UI call a port without its slice's use case, or does the change remove a use case, port, or middleware because it only passes calls through? These layers stay even when they are thin.
+13. Does the change remove a use case, port, or middleware because it only passes calls through? These layers stay even when they are thin.
 
 Report the problems in order of severity, each with the fix you recommend. If you find none, say so in one line. Do not edit files.

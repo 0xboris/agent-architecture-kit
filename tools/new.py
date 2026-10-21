@@ -82,7 +82,7 @@ def copy_tree(source, dest, values, overwrite, report):
 def copy_kit_files(kit, dest, language, values, overwrite, report):
     copy_tree(os.path.join(kit, "templates", "common"), dest, values, overwrite, report)
     os.makedirs(os.path.join(dest, "tools"), exist_ok=True)
-    for tool in ("archcheck.py", "agent-stop-check.sh"):
+    for tool in ("archcheck.py", "gateguard.py", "agent-stop-check.sh"):
         target = os.path.join(dest, "tools", tool)
         shutil.copy2(os.path.join(kit, "tools", tool), target)
         os.chmod(target, 0o755)

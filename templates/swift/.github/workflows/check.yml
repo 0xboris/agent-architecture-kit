@@ -10,6 +10,11 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Keep gate files out of branches other than main
+        if: github.event_name == 'pull_request' && github.base_ref != github.event.repository.default_branch
+        run: python3 tools/gateguard.py HEAD^1
       - name: Run the check
         run: ./check
       - name: Fail if the module map is out of date
