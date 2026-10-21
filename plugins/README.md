@@ -4,7 +4,11 @@ The kit is also a Claude Code plugin marketplace, named `agent-architecture-kit`
 
 ## pstack
 
-`plugins/pstack/` is [pstack](https://github.com/cursor/plugins/tree/main/pstack) by Lauren Tan, MIT licensed, with ten edits. Read literally, some pstack rules remove layers that a project's architecture requires, replace the test doubles that its testing rules prescribe, or tell the agent to fix a failing check itself. The edits scope those rules to what the repository's architecture docs allow:
+`plugins/pstack/` is [pstack](https://github.com/cursor/plugins/tree/main/pstack) by Lauren Tan, MIT licensed, with twelve edits in two groups.
+
+### Rules that defer to the architecture
+
+Read literally, some pstack rules remove layers that a project's architecture requires, replace the test doubles that its testing rules prescribe, or tell the agent to fix a failing check itself. Ten edits scope those rules to what the repository's architecture docs allow:
 
 | Upstream file | Upstream rule | The edit adds |
 | --- | --- | --- |
@@ -18,7 +22,18 @@ The kit is also a Claude Code plugin marketplace, named `agent-architecture-kit`
 | `typescript-best-practices` | Mock only what you can't run locally. | Follow the repository's rules for test doubles at a boundary. |
 | `poteto-mode/playbooks/autonomous-run.md` | Fix flaky verifiers and tooling failures yourself. | An owner-controlled gate is not a tooling failure. Never loosen it to get green. |
 
-The edits name no part of the kit, so the same edits can go upstream. Once upstream has them, a project can enable `pstack@cursor-plugins` instead, and this copy can go.
+### GitHub in Claude Code cloud sessions
+
+A Claude Code cloud session blocks GitHub's GraphQL API. Every `gh pr` command fails there, and so does pstack's PR watcher, `scripts/watch-pr/watch-pr`, which the babysit and shipping playbooks use. `gh api` with REST paths still works, and so do the GitHub MCP tools, which run outside the session.
+
+Two edits to pstack's Claude Code adapter, `docs/harness/claude-code.md`, cover this. One changes its "built-in PR tool" row, and the other adds the section "GitHub in cloud sessions":
+
+- The agent detects a cloud session by running `gh api graphql` once, before its first GitHub step.
+- In a cloud session, the GitHub MCP tools are pstack's built-in PR tool, which its playbooks already prefer over a forge command. A table maps each `gh pr` command that pstack uses to an MCP tool. `gh api` REST paths cover the rest.
+- In place of `watch-pr`, the session subscribes to each PR with `subscribe_pr_activity`, so CI results, reviews, comments, and the merge wake it. At each wake it reads the PR's state with the MCP tools and applies the playbook's rules. A check-in with `send_later` covers changes that wake no session, such as a conflict from a push to the base.
+- `orch frontier set` reads PRs with `gh pr list`, so the Orchestrate playbook runs from a session outside the cloud.
+
+None of the edits names the kit, so the same edits can go upstream. Once upstream has them, a project can enable `pstack@cursor-plugins` instead, and this copy can go.
 
 Do not edit `plugins/pstack/` by hand. `tools/vendor_pstack.py` builds it:
 
@@ -27,7 +42,7 @@ python3 tools/vendor_pstack.py              # vendor upstream main
 python3 tools/vendor_pstack.py --ref SHA    # vendor one upstream commit
 ```
 
-The script clones `cursor/plugins`, applies the edits in its `EDITS` list to `pstack/`, runs upstream's generator for the Claude Code tree, and copies that tree here. It sets the plugin's version to the upstream version plus `+kit.` and the upstream commit, so Claude Code sees each update. When upstream rewords a line that an edit changes, the script stops and names the line. Update the edit to match, and run the script again. An edit that upstream already has is skipped.
+The script clones `cursor/plugins`, applies the edits in its `EDITS` list to `pstack/`, runs upstream's generator for the Claude Code tree, and copies that tree here. It sets the plugin's version to the upstream version plus `+kit.`, the upstream commit, and a hash of the edits, so Claude Code sees a change to either. When upstream rewords a line that an edit changes, the script stops and names the line. Update the edit to match, and run the script again. An edit that upstream already has is skipped.
 
 ## Proposing the edits upstream
 
@@ -35,7 +50,11 @@ The script clones `cursor/plugins`, applies the edits in its `EDITS` list to `ps
 python3 tools/vendor_pstack.py --diff pstack.diff
 ```
 
-This writes the edits, with upstream's regenerated `harness/pstack/claude-code/` tree, as a patch against `cursor/plugins` main. Apply it in a fork with `git apply pstack.diff`, then open a pull request with this title and body.
+This writes all twelve edits, with upstream's regenerated `harness/pstack/claude-code/` tree, as one patch against `cursor/plugins` main. The two groups are separate topics, so propose them as two pull requests. Each half passes upstream's checks on its own.
+
+### Pull request 1: rules that defer to the architecture
+
+In a branch of your fork, run `git apply --exclude='*/docs/harness/claude-code.md' pstack.diff`, then open a pull request with this title and body.
 
 Title:
 
@@ -69,3 +88,38 @@ Several pstack rules, read literally, remove layers that a repository's own arch
 ```
 
 Before you open it, run both commands in the fork, as upstream's CI does, and replace the last line with what you have seen in your own projects.
+
+### Pull request 2: GitHub in Claude Code cloud sessions
+
+In a second branch, run `git apply --include='*/docs/harness/claude-code.md' pstack.diff`, then open a pull request with this title and body.
+
+Title:
+
+```
+fix(pstack): reach GitHub without GraphQL in Claude Code cloud sessions
+```
+
+Body:
+
+```markdown
+## Why
+
+A Claude Code cloud session blocks GitHub's GraphQL API, with the message "GitHub GraphQL is not available from Claude Code sessions". Every `gh pr` command fails there, and so does `scripts/watch-pr/watch-pr`, so the babysit, shipping, and autopilot playbooks stop at their first GitHub step. REST through `gh api` and the GitHub MCP tools still work.
+
+## What changed
+
+- The Claude Code adapter gets a section, GitHub in cloud sessions. The agent detects a cloud session with one `gh api graphql` call, then uses the GitHub MCP tools as the built-in PR tool. A table maps each `gh pr` command that pstack uses to an MCP tool.
+- In a cloud session, PR activity subscriptions replace `watch-pr`: GitHub events wake the session, which rereads the PR and applies the playbook's rules.
+- The "built-in PR tool" row points cloud sessions to the new section.
+
+## Scope
+
+- Only Claude Code cloud sessions see a change. Local Claude Code sessions and Cursor read the adapter as before.
+- `watch-pr` and `orch` keep their GraphQL code. The Orchestrate playbook still needs a session outside the cloud.
+
+## Verification
+
+- `node scripts/generate-pstack-harness-trees.mjs --check` passes on the regenerated tree.
+- `node scripts/validate-plugins.mjs` passes.
+- In a cloud session, `gh pr view` and `gh api graphql` fail with HTTP 403, while `gh api` REST paths and the MCP tools in the table return the fields it names.
+```
