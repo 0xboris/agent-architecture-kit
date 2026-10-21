@@ -10,6 +10,14 @@ already_continued=$(printf '%s' "$input" | python3 -c 'import json, sys; print(j
 cd "${CLAUDE_PROJECT_DIR:-.}" || exit 0
 git rev-parse --git-dir > /dev/null 2>&1 || exit 0
 
+# An agent that works in a git worktree of this repository is checked there,
+# since its changes are not in the main checkout.
+cwd=$(printf '%s' "$input" | python3 -c 'import json, sys; print(json.load(sys.stdin).get("cwd", ""))' 2>/dev/null)
+if [ -n "$cwd" ] && worktree=$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null) &&
+  [ "$(git -C "$worktree" rev-parse --path-format=absolute --git-common-dir)" = "$(git rev-parse --path-format=absolute --git-common-dir)" ]; then
+  cd "$worktree" || exit 0
+fi
+
 # Changes count against the default branch, so committed work on a feature
 # branch is checked too. A repository without commits has only uncommitted changes.
 if git rev-parse --verify --quiet HEAD > /dev/null; then

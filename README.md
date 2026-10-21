@@ -15,6 +15,10 @@ docs/architecture/<language>.md   the language rules for Swift, Go, and TypeScri
 tools/archcheck.py                the architecture check
 tools/new.py                      creates projects and adopts existing ones (runs from the kit only)
 tools/agent-stop-check.sh         Claude Code Stop hook that runs ./check
+tools/gateguard.py                CI check that keeps gate-file changes out of branches other than main
+tools/vendor_pstack.py            builds the kit's copy of pstack (runs from the kit only)
+.claude-plugin/marketplace.json   the kit as a Claude Code plugin marketplace
+plugins/                          the kit's copy of pstack, and how it differs from upstream
 templates/common/                 AGENTS.md, CLAUDE.md, GLOSSARY.md, .claude/, CODEOWNERS
 templates/swift|go|typescript/    a working project with the Notes reference slice and its stack.md
 examples/                         pages that show the architecture in example projects (not copied into projects)
@@ -23,12 +27,12 @@ examples/                         pages that show the architecture in example pr
 Each project receives:
 
 - **The docs.** `docs/ARCHITECTURE.md`, its language guide, `docs/architecture/stack.md` for the project's libraries, and the generated module map.
-- **The tools.** `tools/archcheck.py`, the Stop hook script, and `./check`, the one command that verifies everything.
+- **The tools.** `tools/archcheck.py`, the Stop hook script, the gate guard, and `./check`, the one command that verifies everything.
 - **The configuration.** `architecture.json` maps directories to module kinds and sets the rules for each kind, and `architecture-baseline.json` holds the violations you have accepted.
 - **Agent instructions.** `AGENTS.md`, which names the reference slice, a `CLAUDE.md` that imports it, and a `README.md` to fill in with what the project does.
 - **Claude Code integration in `.claude/`.** The Stop hook, a path-scoped rule that points agents to the docs, the `new-slice` and `new-port` checklists, and the `architecture-reviewer` subagent.
 - **Code owners.** `.github/CODEOWNERS` covers the gate files and the composition root.
-- **CI.** `.github/workflows/check.yml` runs `./check`.
+- **CI.** `.github/workflows/check.yml` runs `./check`, and the gate guard on pull requests into branches other than main.
 - **The Notes reference slice.** A small working feature with a domain rule, a port, middleware, a slice, an adapter, stubs, adapter tests against the real file system, and a composition test.
 
 ## Requirements
@@ -116,6 +120,53 @@ TypeScript projects created before 2026-10-19 have no linter. To add it:
 4. Run `npx oxlint` and fix what it reports. Most findings in tests are stubs written as `async` functions without `await`, and JSON responses read as `any`.
 5. Describe the linter in `docs/architecture/stack.md`, as the template's copy does.
 
+## Workflow plugins such as pstack
+
+A workflow plugin decides how an agent works: which steps it takes, which subagents it spawns, and how it reviews and lands its pull requests. [pstack](https://github.com/cursor/plugins/tree/main/pstack) is one. The kit decides where code goes and fails the check when code goes elsewhere. The two work together, with the kit's rules on top.
+
+The kit serves its own copy of pstack with ten edits, which `plugins/README.md` lists. Read literally, a few pstack rules remove layers that the architecture requires, replace the stubs that its testing rules prescribe, or tell the agent to fix a failing check itself. Each edit scopes one such rule to what the repository's architecture docs allow, so the agent reads one set of rules instead of two that disagree. The edits name no part of the kit, and `plugins/README.md` describes how to propose them upstream. Once upstream has them, enable `pstack@cursor-plugins` instead.
+
+To enable the kit's copy for everyone who works on a project, add this to `.claude/settings.json`. It is a gate file, so commit the change yourself.
+
+```json
+"extraKnownMarketplaces": {
+  "agent-architecture-kit": {"source": {"source": "github", "repo": "0xboris/agent-architecture-kit"}}
+},
+"enabledPlugins": {"pstack@agent-architecture-kit": true}
+```
+
+Claude Code registers the marketplace after a contributor accepts the workspace trust dialog, and only for contributors who can read the kit's repository. Cloud sessions show no such dialog, so install the plugin there with `/plugin install pstack@agent-architecture-kit`. Then type `/pstack:poteto-mode` before a task.
+
+The architecture holds in a pstack session for these reasons:
+
+- **The check.** The Stop hook runs `./check` in the checkout or git worktree the session works in. UI that uses a port fails the check, so an agent cannot replace a use case by calling its port from the UI.
+- **The gates.** Branch protection and `CODEOWNERS` hold every change to a gate file on main for your review, and the gate guard keeps gate changes out of feature branches. pstack's autonomous playbooks merge pull requests on their own but never bypass an approval that GitHub enforces. This works only when agents open pull requests under their own account, as described under "Start a new project".
+- **The kit's copy of pstack.** Its rules keep the layers that `docs/ARCHITECTURE.md` requires, and it treats an owner's gate as a gate, not as a tooling failure.
+- **The precedence section.** The "Skills and plugins" section in `AGENTS.md` covers what no edit does: a failing check is a finding in the code, and rules and checks that a workflow writes are gate changes. Claude Code loads it in every session and in pstack's subagents.
+- **The reviewer.** The `architecture-reviewer` subagent runs before each pull request, next to pstack's own reviews.
+
+The Stop hook runs only when the main session finishes. pstack's subagents run `./check` because `AGENTS.md` tells them to, and the main session's Stop hook checks their combined work. If the main session ends a turn while subagents still edit files, the hook can report failures in their unfinished work.
+
+Projects created before 2026-10-21 get all of this, the port check and the gate guard included, with these steps:
+
+1. Copy `tools/archcheck.py`, `tools/gateguard.py`, and `tools/agent-stop-check.sh` from the kit.
+2. In `architecture.json`, add `portFiles` with the files that declare the ports, and `"forbidPorts": true` to each UI kind, as the language template does. Run `./check` and fix or baseline what it reports.
+3. Add the gate guard step and `fetch-depth: 2` to `.github/workflows/check.yml`, as in the language template.
+4. Copy the "Skills and plugins" section of `templates/common/AGENTS.md` into the project's `AGENTS.md`, and question 13 of `templates/common/.claude/agents/architecture-reviewer.md` into the project's reviewer.
+
+## Autopilot on a feature branch
+
+Agents can build a large feature on their own: several tracks in parallel, each delivered as pull requests into one feature branch, and one pull request from the feature branch into main at the end, which you review and approve. pstack's Autopilot-full playbook comes closest, with the feature branch in place of main. These steps keep the architecture intact during the run, and keep the final review small enough to be a real review.
+
+1. **Review the foundation before the tracks start.** The first pull request into the feature branch holds the shared shape: glossary entries, domain types and rule signatures, new ports and their result types, changes to stored formats and wire contracts, and an empty slice with its wiring for each track. Every track builds on it, so a mistake here costs the most when it is found late.
+2. **Let the tracks run.** Slices never import each other, so tracks mostly touch different files, apart from the domain and the composition root. A track's pull request merges into the feature branch once CI passes, the architecture reviewer has run, and the workflow's own verification is done.
+3. **Keep the gates.** Branch protection usually covers only main, so the feature branch has no owner review. The gate guard fails a pull request into any branch other than main that changes a gate file, so agents put gate changes into their own pull request against main and wait for you on that track. GitHub runs the workflow from the pull request itself, so a pull request that deletes the guard step also passes. That deletion is a change to `.github/`, so it appears among the gate files of the final review.
+4. **Merge, never rebase, the shared branch.** Merge track pull requests with merge commits, so that each track stays visible, and merge main into the feature branch regularly. Several agents work from the branch, so its history must not change under them.
+5. **Ask for a review guide in the final pull request.** Its description lists the gate-file changes, which should be none; the composition-root diff; the ports, stored formats, and wire contracts that changed after the foundation review; and each track, with links to its pull requests and their verification. Review those closely and skim the rest, which the check, the tests, and the verifiers have covered.
+6. **Let an agent identity open the final pull request.** GitHub does not let you approve your own pull request.
+
+Try it first on a medium feature with two or three tracks before you trust it overnight. It has not been tried with the kit yet.
+
 ## Frameworks
 
 The architecture names no framework. The domain and use cases import none, so a framework can only sit in UI, adapters, the composition root, and tests. Each project allows its frameworks per kind in `architecture.json`, describes them in `docs/architecture/stack.md`, and shows how to use them in the reference slice. The templates use only each language's standard library. To switch to other libraries, follow "Changing a library" in `docs/architecture/stack.md`.
@@ -147,6 +198,8 @@ Lines that start with `//` are comments.
   - `bannedTerms`: `"glossary"` or a list of words.
   - `composition`: `allowedFiles`, `controlFlowAllowedIn`, `controlFlowAllowedPatterns`, and `maxLines`.
   - `publicEntry`: file names, such as `["index.ts"]`. Other modules may import a module of this kind only through one of these files. TypeScript only.
+  - `forbidPorts`: `true` makes the check fail when a module of this kind uses a port by name. The templates set it for UI, which reaches ports only through use cases.
+- **`portFiles`.** Glob patterns for the files that declare the ports. The check reads the port names from them: interfaces in TypeScript, interface types in Go, and protocols in Swift. A kind with `forbidPorts` needs this setting.
 - **`typescript.aliases`.** Maps import names to directories, such as a workspace package `@acme/domain` to `packages/domain/src`, so that the check resolves those imports to modules.
 - **`externalSets` and `forbiddenCallSets`.** Named lists that kinds refer to as `@name`. An entry with a slash, such as `@hono/node-server` or `@hono/*`, is a scoped npm package, not a set. A reference to a set that does not exist fails the check.
 
@@ -201,6 +254,16 @@ Retested on Linux on 2026-10-19 with Node 24.22, TypeScript 7.0.2, oxlint 1.88.0
 - **Several apps.** The test project with an API, a React web app, and a shared domain moved from TypeScript 6 and ESLint to TypeScript 7 and oxlint, and `./check` passes: the contract, lint, type checks of every package, Vitest, and the Vite build. Lint fails on an assertion in a slice's `.tsx` file and on a list item without a key, and allows assertions in the shared domain and in tests. openapi-typescript, which needs TypeScript's JavaScript API, runs with TypeScript 5.9 from a package of its own and generates the same client. The hooks rule runs only on the React app, because the API's `useCases()` wiring helper is not a hook.
 - **A fresh agent.** Given only the kit and the stack, a new agent built an API, a web app, and a shared domain with notes and users. It arrived at the same design, with an author slot that a screen fills and the edit rule in the shared domain, and `./check` passed. The gaps it reported are fixed: the steps from one app to several, an `architecture.json` for several apps, the React hooks rule, the shared domain's tests, `openapi.ts` in `allowedFiles`, and the fix message for an import between slices whose kinds have project names, such as `web-ui`.
 
+Retested on Linux on 2026-10-20, after the Stop hook learned to check git worktrees:
+
+- **Stop hook.** I ran the script directly with hook input. With `cwd` in a git worktree of the project, it runs `./check` there and blocks on a failing change that the main checkout does not have. Before this change, it passed. With `cwd` in another repository, outside any repository, or missing, it checks the main checkout as before.
+
+Retested on Linux on 2026-10-21, after the port check, the gate guard, and the kit's copy of pstack were added:
+
+- **Port check.** `init` creates TypeScript, Go, and Swift projects whose architecture check passes. A port used in a slice's UI fails in all three, also as a qualified name such as `domain.NoteStore` in Go. A port named in a comment or a string passes. The baseline accepts the violation. A UI kind with `forbidPorts` and no `portFiles` is a configuration error. Swift was checked with the architecture check only, without a Swift build.
+- **Gate guard.** I ran the script directly in a TypeScript and a Go project. It passes wiring changes in the composition root, a new slice, a glossary entry, and the generated module map. It fails on `architecture.json`, `package.json`, `go.mod`, and a deleted `.claude/settings.json`. The workflow step itself has not run on GitHub yet.
+- **The kit's copy of pstack.** `tools/vendor_pstack.py` applied all ten edits to cursor/plugins at commit 190d287, and upstream's generator check and plugin validator pass on the result. `claude plugin validate` passes on the marketplace and the plugin, and Claude Code installs `pstack@agent-architecture-kit` from a local clone of the kit.
+
 Not tested:
 
 - **A template for several apps.** `init` still creates one app. "From one app to several" in `docs/architecture/typescript.md` gives the steps and an `architecture.json` for an API, a web app, and a shared domain.
@@ -211,4 +274,5 @@ Not tested:
 - **GitHub.** The GitHub Actions workflows were not run, and `CODEOWNERS` enforcement was not tried.
 - **The Xcode app.** The project steps for Swift and an iOS build of the app.
 - **Larger code.** Adoption in a real, larger codebase, and the check's speed on a large repository.
+- **pstack in a kit project.** Nobody has run pstack's playbooks in a kit project, and the autopilot workflow on a feature branch has not been tried.
 - **Other setups.** TypeScript path aliases, TypeScript frontends or frameworks such as Express or Fastify, Core Data or SwiftData adapters, and Windows.
