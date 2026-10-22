@@ -110,6 +110,8 @@ The composition root holds wiring and nothing else, so a reader finds every choi
 
 The architecture check holds it to its file names, to wiring without control flow outside the configuration file, and to a line limit. Each failure names the fix.
 
+The composition root decides which middleware each slice receives, such as authentication. No check sees a slice lose a middleware it needs, so the composition root is a gate file, and the owner reviews its changes. They are a few lines of wiring, so the review is short.
+
 ## Boundaries
 
 - **Parse at the edge.** Data from outside the process becomes domain types where it enters. This includes requests, responses, database rows, files, stored settings, and deep links. Inside, code trusts its types.
@@ -163,18 +165,18 @@ A passing check does not show that a change works. Before a change is done, driv
 - **The architecture check** (`tools/archcheck.py`, configured in `architecture.json`) maps every source file to a module and checks these things:
   - imports between modules
   - frameworks and libraries per kind
-  - I/O calls in modules that must not perform I/O
+  - calls that a kind must not make, such as I/O in the domain
   - glossary terms in utilities and shared UI
   - the shape of the composition root
   - imports between apps, and imports into a module that bypass its public entry
   - ports used in UI, which reaches them only through use cases
   - cycles
-- **The baseline** (`architecture-baseline.json`) records violations that existed before the rules were adopted. The check fails only when a change adds a violation. When code is fixed, lower the baseline in the same change with `python3 tools/archcheck.py --write-baseline`.
-- **Project checks** in `checks/` are executables that `./check` runs, one step each. Add one when a mistake keeps coming back and neither `architecture.json` nor the linter can catch it. Its message names the fix.
-- **Gate files** define the checks: `architecture.json`, `check`, `tools/`, `.claude/`, `.github/`, the instruction files, the architecture docs, and the compiler, linter, and test runner settings. A change to them can loosen a check, so a code-owner rule requires the owner's review. Never change a gate file to make a check pass.
-- **The gate guard** (`tools/gateguard.py`) runs in CI on every pull request. It fails when the baseline gains a violation, when an existing file in `checks/` changes or goes away, or when the glossary loses a term. Lowering the baseline, adding a check, and adding a term only tighten the rules, so none of them needs the owner. A pull request that loosens one of them passes only with a row in the exceptions table of `AGENTS.md`, which the owner reviews, and CI marks each loosening on the pull request.
+- **The baseline** (`architecture-baseline.json`) records violations that existed before the rules were adopted. The check fails when a change adds a violation, and when the baseline accepts more violations than exist, because a fixed violation could otherwise come back unnoticed. When code is fixed, lower the baseline in the same change with `python3 tools/archcheck.py --write-baseline`.
+- **Project checks** in `checks/` are executables that `./check` runs, one step each. Add one when a mistake keeps coming back and neither `architecture.json` nor the linter can catch it. Its message names the fix. A check runs from the repository root, and finds its helpers next to itself.
+- **Gate files** define the checks: `architecture.json`, `check`, `tools/`, `.claude/`, `.github/`, the instruction files, the architecture docs, the compiler, linter, and test runner settings, and the composition root. A change to them can loosen a check, so a code-owner rule requires the owner's review. Never change a gate file to make a check pass.
+- **The gate guard** (`tools/gateguard.py`) runs in CI on every pull request. It fails when the baseline gains a violation, when an existing file in `checks/` changes or goes away, when the glossary loses a term, or when production code gains a lint or type-check suppression. Lowering the baseline, adding a check, and adding a term only tighten the rules, so none of them needs the owner. A pull request that loosens a check passes only when it adds a row to the exceptions table of `AGENTS.md` with a reason and an expiry date, and CI marks each loosening on the pull request. `AGENTS.md` is a gate file, so the owner reviews the row. Once a row's date passes, the gate guard fails every pull request until someone fixes what the row allowed and removes it.
 - **The Stop hook** runs `./check` before an agent finishes a task that changed files.
-- **CI** first runs the existing project checks as the base branch has them, before any code from the pull request runs. Then it runs `./check`, and fails when `./check` changed or added a file. In `./check`, the tests run after the architecture check, the linter, and the type checker, and before the project checks, so the base-branch run is what keeps a test or a new check from changing an existing check before it runs.
+- **CI** first runs the existing project checks as the base branch has them, with `python3 tools/gateguard.py --base-checks`, before any code from the pull request runs. It skips a check that the pull request changes with an approved exception. Then CI runs `./check`, and fails when `./check` changed or added a file. In `./check`, the tests run before the project checks, so the base-branch run is what keeps a test or a new check from changing an existing check before it runs.
 - **Review** of every pull request, by people and by agents, answers the questions in `docs/architecture/review.md`. `AGENTS.md` tells an agent that runs `/pstack:interrogate` to pass that file to the reviewers as a context file.
 - **The rule table** in `AGENTS.md` pairs each rule with what enforces it, so a rule that nothing enforces stands out.
 

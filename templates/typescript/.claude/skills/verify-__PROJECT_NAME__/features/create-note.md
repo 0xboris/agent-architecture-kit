@@ -29,4 +29,4 @@ Preconditions:
 
 - The service trims the title. Assert the stored title, not the one you sent.
 - A `201` alone is not proof. Read the note back with `GET /notes`.
-- The limit counts characters, not bytes, so an emoji counts as one character.
+- The limit counts Unicode code points, not bytes. An emoji with a skin tone is two code points, so it counts as two.

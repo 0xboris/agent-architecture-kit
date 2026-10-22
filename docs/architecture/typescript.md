@@ -31,7 +31,7 @@ Node runs the TypeScript files directly by stripping types, and `tsc --noEmit` c
 
 ## Domain
 
-- **Model.** Interfaces with `readonly` fields, and branded types for values with rules, like `NoteTitle`. One private function, like `brokenTitleRule`, holds the rules and names the first one a value breaks. The type guard, like `isNoteTitle`, uses it and is the only way to get a branded value. The parse function, like `parseNoteTitle`, uses both and returns the broken rule as its error case. The linter rejects type assertions in production code, so no code can create a branded value without its check. `as const` is not a type assertion and is allowed everywhere.
+- **Model.** Interfaces with `readonly` fields, and branded types for values with rules, like `NoteTitle`. One private function, like `brokenTitleRule`, holds the rules and names the first one a value breaks. The type guard, like `isNoteTitle`, uses it, and the parse function, like `parseNoteTitle`, uses both and returns the broken rule as its error case. Production code gets a branded value only from these two. The linter rejects type assertions there, and the architecture check rejects `__brand` outside the domain. A type guard can still claim any type, so review checks that only the domain writes a guard for a domain type. `as const` is not a type assertion and is allowed everywhere.
 - **Ids.** A plain `string` while a slice has one kind of id. Brand ids, like `NoteId`, once two kinds of id could be passed for each other.
 - **Results.** Expected failures are a `Result` from utilities, with a union of error cases, like `NoteTitleError`. Throw only for unexpected failures.
 - **Rules.** Plain functions, like `newestFirst`.
@@ -76,14 +76,14 @@ The linter runs type-aware rules, which need type information from the compiler.
 - **No `any` flowing into typed values.** The result of `JSON.parse` or `response.json()` is `any`. Production code parses it with a parse function or a schema. Tests may assert its type.
 - **Every promise is awaited or handled.** A test double that only returns a value is written as `() => Promise.resolve(value)` or `() => Promise.reject(error)`, not as an `async` function without `await`.
 - **Generated code is not linted.** Exclude a generated file, such as an API client, in the linter's settings, and regenerate it instead of editing it.
-- **Fix a lint finding instead of silencing it.** A disable comment needs the owner's approval, like a change to the linter's settings.
+- **Fix a lint finding instead of silencing it.** A disable comment in production code needs a row in the exceptions table of `AGENTS.md`, which the owner approves, and the gate guard fails a pull request that adds one without it. The comment names its reason on its line.
 
 TypeScript 7.0's npm package holds the compiler but no JavaScript API: `import ts from 'typescript'` gives only its version. A tool that calls that API, such as a code generator that prints TypeScript, fails with TypeScript 7. Give such a tool a workspace package of its own that depends on the tool and on the TypeScript version that the tool's peer dependency asks for, such as 5.9 for openapi-typescript 7, and run it from there. A package manager resolves a tool's `typescript` peer dependency from the package that depends on the tool, so the rest of the repository keeps TypeScript 7. Tools that only strip types, such as Node, Vite, and Vitest, work with any version.
 
 ## Tests
 
 - A test file sits next to the code it tests and ends in `.test.ts`.
-- Use case, UI, middleware, and composition tests use the real adapter through a helper in the adapter module, like `temporaryNoteStore()` in `fileNoteStore.testing.ts`, and assert what the store returns afterwards.
+- Use case, UI, middleware, and composition tests use the real adapter through a helper in the adapter module, like `temporaryNoteStore(t)` in `fileNoteStore.testing.ts`, and assert what the store returns afterwards.
 - Test support holds sample data, like `sampleNote`, small fakes for ports whose state a test drives, like `FakeClock`, and implementations that fail, like `failingNoteStore`. Each is typed as the port, so the compiler fails the test when the port changes.
 - The adapter's own tests run against the real system, such as a real database or a temporary directory. A stored format has a file in the adapter's `testdata/`, like `notes-v1.json`, and a test that loads it.
 - Name a helper that only tests use, such as a function that creates a database for tests, `*.testing.ts`. The check treats it as test code, so production code cannot import it. It lives next to the adapter, because test support may not import adapters.
@@ -145,7 +145,7 @@ apps/web/src/adapters/api/       the generated API client and the adapter that p
 1. Move `src/` and the app's `package.json` and `tsconfig.json` into `apps/api/`. Add `pnpm-workspace.yaml` with `apps/*` and `packages/*`, a root `package.json` for the tools that run on every package, such as the linter and TypeScript, and a `tsconfig.base.json` that each package extends.
 2. Create `packages/domain` for the rules that more than one app needs, and move them there from the API's domain. Rewrite their imports to the package name.
 3. Map every app in `architecture.json`, as in the example below. Test files and configuration files now sit below the root, so their patterns need `**/` or the app's directory.
-4. Change `.github/CODEOWNERS`: settings files anywhere, such as `**/package.json`, `**/tsconfig*.json`, and `**/vite.config.*`, the lockfile `/pnpm-lock.yaml`, and the contract `/apps/api/openapi.json`. Change the `paths` in `.claude/rules/architecture.md` to `apps/**/src/**` and `packages/**/src/**`, and the `include` of each package's `tsconfig.json` to cover `scripts` and `checks` where the package has them.
+4. Change `.github/CODEOWNERS`: settings files anywhere, such as `**/package.json`, `**/tsconfig*.json`, and `**/vite.config.*`, the lockfile `/pnpm-lock.yaml`, the contract `/apps/api/openapi.json`, and the composition root of each app, `/apps/*/src/app/`. Change the `paths` in `.claude/rules/architecture.md` to `apps/**/src/**` and `packages/**/src/**`, and the `include` of each package's `tsconfig.json` to cover `scripts` and `checks` where the package has them.
 5. Add the contract step to `./check`, run the type checks and tests of every package (`pnpm --recursive run typecheck`), and build each client.
 6. Describe the workspace in `docs/architecture/stack.md`. pnpm 10 and later run no install script of a dependency unless `allowBuilds` in `pnpm-workspace.yaml` allows it, and may refuse a version released in the last day. Note what the project allows and why.
 
@@ -179,7 +179,7 @@ apps/web/src/adapters/api/       the generated API client and the adapter that p
   "kinds": {
     "shared-domain": {"mayImport": [], "external": {"allow": []}, "forbiddenCalls": ["@io"]},
     "domain": {"mayImport": ["shared-domain", "utilities"], "external": {"allow": []}, "forbiddenCalls": ["@io"]},
-    "usecases": {"mayImport": ["shared-domain", "domain", "utilities"], "external": {"allow": []}, "forbiddenCalls": ["@io"]},
+    "usecases": {"mayImport": ["shared-domain", "domain", "utilities"], "external": {"allow": []}, "forbiddenCalls": ["@io", "@brand"]},
     // a pure library that the project allows, such as "zod", goes into external.allow of shared-domain and domain
     // ui, shared-ui, adapter, utilities, and test-support as in the template, with "shared-domain" added to
     // mayImport where they use the shared rules; composition with "openapi.ts" in allowedFiles
@@ -187,18 +187,20 @@ apps/web/src/adapters/api/       the generated API client and the adapter that p
       "mayImport": ["usecases@same-slice", "shared-domain", "domain", "web-shared-ui"],
       "forbidPorts": true,
       "external": {"allow": ["@react"]},
-      "forbiddenCalls": ["@io"],
+      "forbiddenCalls": ["@io", "@brand"],
       "publicEntry": ["index.ts"]
     },
-    "screen": {"mayImport": ["web-ui", "web-shared-ui"], "forbidPorts": true, "external": {"allow": ["react", "@tanstack/react-router"]}, "forbiddenCalls": ["@io"]},
-    "web-shared-ui": {"mayImport": [], "external": {"allow": ["react"]}, "forbiddenCalls": ["@io"], "bannedTerms": "glossary"},
+    "screen": {"mayImport": ["web-ui", "web-shared-ui"], "forbidPorts": true, "external": {"allow": ["react", "@tanstack/react-router"]}, "forbiddenCalls": ["@io", "@brand"]},
+    "web-shared-ui": {"mayImport": [], "external": {"allow": ["react"]}, "forbiddenCalls": ["@io", "@brand"], "bannedTerms": "glossary"},
     "web-composition": {
       "mayImport": ["*"],
       "external": {"allow": ["@react", "react-dom/client"]},
+      "forbiddenCalls": ["@brand"],
       "composition": {"allowedFiles": ["main.tsx", "container.tsx", "routes.tsx", "config.ts", "live.ts", "wire-*.ts"], "controlFlowAllowedIn": ["config.ts"], "maxLines": 400}
     }
   },
   "externalSets": {"react": ["react", "@tanstack/react-query", "@tanstack/react-router"]}
+  // forbiddenCallSets with io and brand as in the template
 }
 ```
 

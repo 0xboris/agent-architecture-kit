@@ -42,12 +42,21 @@ def fill(text, values):
 # wherever they sit. An agent could weaken a check by changing them, so they are
 # gate files too. A nested settings file can switch off rules for its folder, a
 # nested go.mod or a go.work can hide packages from go vet and go test, and in
-# TypeScript, package.json can run an install script before ./check.
+# TypeScript, package.json can run an install script before ./check. In Swift,
+# Package.swift decides which targets build and which tests run.
 TOOL_CONFIG_PATHS = {
-    "swift": ["**/.swiftlint.yml"],
+    "swift": ["**/.swiftlint.yml", "**/Package.swift", "**/Package.resolved"],
     "go": ["**/go.mod", "/go.work", "**/.golangci.yml", "**/.golangci.yaml"],
     "typescript": ["**/package.json", "/package-lock.json", "/pnpm-lock.yaml", "**/tsconfig*.json", "**/.oxlintrc.json",
                    "**/oxlint.config.*", "**/eslint.config.*", "**/vitest.config.*", "/pnpm-workspace.yaml", "**/.npmrc"],
+}
+
+# The composition root decides which middleware each slice receives, such as
+# authentication, so dropping it is a loosening that no check sees.
+COMPOSITION_PATHS = {
+    "swift": ["/App/", "/Packages/AppModules/Sources/AppComposition/"],
+    "go": ["/cmd/", "/internal/app/"],
+    "typescript": ["/src/app/"],
 }
 
 
@@ -79,7 +88,7 @@ def copy_tree(source, dest, values, overwrite, report):
 def copy_kit_files(kit, dest, language, values, overwrite, report):
     copy_tree(os.path.join(kit, "templates", "common"), dest, values, overwrite, report)
     os.makedirs(os.path.join(dest, "tools"), exist_ok=True)
-    for tool in ("archcheck.py", "gateguard.py", "run-base-checks.sh", "agent-stop-check.sh"):
+    for tool in ("archcheck.py", "gateguard.py", "agent-stop-check.sh"):
         target = os.path.join(dest, "tools", tool)
         shutil.copy2(os.path.join(kit, "tools", tool), target)
         os.chmod(target, 0o755)
@@ -89,11 +98,16 @@ def copy_kit_files(kit, dest, language, values, overwrite, report):
         shutil.copy2(os.path.join(kit, "docs", "architecture", page), os.path.join(dest, "docs", "architecture", page))
 
 
+def owner_lines(paths, owner):
+    return "\n".join(f"{path:<29} {owner}" for path in paths)
+
+
 def placeholder_values(language, args):
     return {
         "__LANGUAGE__": language,
         "__OWNER__": args.owner,
-        "__TOOL_CONFIG_LINES__": "\n".join(f"{path:<30}{args.owner}" for path in TOOL_CONFIG_PATHS[language]),
+        "__TOOL_CONFIG_LINES__": owner_lines(TOOL_CONFIG_PATHS[language], args.owner),
+        "__COMPOSITION_LINES__": owner_lines(COMPOSITION_PATHS[language], args.owner),
         "__APP_NAME__": args.name,
         "__PROJECT_NAME__": separated(args.name, "-"),
         "__GO_MODULE__": args.module or f"example.com/{args.name.lower()}",
@@ -162,6 +176,10 @@ def adopt(args):
             f.write(text)
     check_target = "check" if not os.path.exists(os.path.join(dest, "check")) else "check.kit"
     shutil.copy2(os.path.join(language_dir, "check"), os.path.join(dest, check_target))
+    workflows = os.path.join(dest, ".github", "workflows")
+    workflow_target = "check.yml" if not os.path.exists(os.path.join(workflows, "check.yml")) else "check.yml.kit"
+    os.makedirs(workflows, exist_ok=True)
+    shutil.copy2(os.path.join(language_dir, ".github", "workflows", "check.yml"), os.path.join(workflows, workflow_target))
     for line in report:
         print(line)
     print(f"\nAdded the architecture kit to {dest}.\n\nNext:")
@@ -174,10 +192,14 @@ def adopt(args):
         "Add the devDependencies oxlint and oxlint-tsgolint at the versions in the kit's templates/typescript/package.json, "
         "edit the paths in .oxlintrc.json to match the project, and fix what `npx oxlint` reports.",
     ] if args.language == "typescript" else []) + [
-        f"Wire {check_target} into your build and CI, and adjust its build and test commands to this project.",
+        f"Adjust the build and test commands in {check_target} to this project, and merge back the project's own steps.",
+        f"Adjust .github/workflows/{workflow_target} to the project's toolchain, and merge in its other CI jobs. "
+        "Keep its steps: the gate guard, the base branch's checks, ./check, and the step that fails when ./check changed a file.",
         "If CLAUDE.md already existed, add the line `@AGENTS.md` at its top.",
         "Name a reference slice in AGENTS.md: the existing slice that best follows docs/ARCHITECTURE.md, or one you rebuild in that shape.",
         "Run /pstack:create-verification-skill, so agents can drive the app and keep the evidence.",
+        "Point the composition-root lines in .github/CODEOWNERS at the project's composition root, "
+        "then turn on branch protection with required code-owner reviews and the check workflow.",
         "Fill in GLOSSARY.md, then follow the adoption steps in the kit's README.",
     ]:
         print(f"  - {step}")

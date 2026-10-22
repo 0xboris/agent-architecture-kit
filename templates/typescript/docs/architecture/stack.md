@@ -13,10 +13,10 @@ The kit's template uses Node's built-in modules only, plus TypeScript 7 and oxli
 ## Tests
 
 - Tests use `node:test` and `node:assert/strict`.
-- Run a use case on a temporary store, then read back what it stored:
+- Run a use case on a temporary store, then read back what it stored. `temporaryNoteStore(t)` deletes the store's directory when the test ends:
 
   ```ts
-  const store = await temporaryNoteStore();
+  const store = await temporaryNoteStore(t);
   const result = await createNote({ store, clock: new FakeClock(), ids: new SequentialIds() }, 'Groceries');
   assert.ok(result.ok);
   assert.deepEqual(await store.allNotes(), [result.value]);

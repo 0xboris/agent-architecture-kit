@@ -24,12 +24,13 @@ The reference slice is **Notes**. Copy its structure when you add a slice, a use
 
 ## Gates
 
-`.github/CODEOWNERS` lists the gate files: `architecture.json`, `check`, `tools/`, `.claude/`, `.github/`, the instruction files, the architecture docs, and the compiler, linter, and test runner settings. A change to them can loosen a check, so the owner reviews it.
+`.github/CODEOWNERS` lists the gate files: `architecture.json`, `check`, `tools/`, `.claude/`, `.github/`, the instruction files, the architecture docs, the compiler, linter, and test runner settings, and the composition root. A change to them can loosen a check, so the owner reviews it. The composition root is on the list because it decides which middleware each slice receives.
 
 - Never change a gate file to make a check pass, and never disable or soften a check to get a pull request green.
-- A gate change, such as a new module kind, a fix to a check you think is wrong, a lint setting, a row in a table below, or a skill, goes into its own pull request against main. Link it in your report and keep working on what doesn't depend on it.
+- A gate change, such as a new module kind, a fix to a check you think is wrong, a lint setting, a row in the rule table, or a skill, goes into its own pull request against main. Link it in your report and keep working on what doesn't depend on it. A slice's wiring and its entries in the verification skill's feature map are the exception. They stay in the slice's pull request, and the owner reviews that pull request.
 - To tighten a rule, add an executable to `checks/` whose message names the fix, or lower the baseline with `python3 tools/archcheck.py --write-baseline` after you fix a violation. Neither needs the owner.
-- Loosening a check is the owner's call. That covers raising the baseline, changing or removing an existing check, and removing a glossary term. Propose it in its own pull request against main, with a row in the exceptions table below. The gate guard fails such a pull request without that row, and the owner reviews it.
+- Loosening a check is the owner's call. That covers raising the baseline, changing or removing an existing check, removing a glossary term, and adding a suppression comment such as `oxlint-disable` or `//nolint` to production code. Add a row to the exceptions table below in the pull request that loosens the check: what it allows, the reason, and an expiry date written as YYYY-MM-DD. The gate guard fails a loosening without a new row, and a new row that lacks any of the three. The owner reviews the row, because `AGENTS.md` is a gate file.
+- A suppression comment also names its reason on its line, as `/pstack:correct` asks of every exception. The row holds the expiry date and the owner's approval, because the gate guard can enforce them there. A raised baseline or a changed check has no line, so its row holds all of it.
 
 ## Rules and what enforces them
 
@@ -41,16 +42,20 @@ When agents keep making the same mistake, fix it at the highest level that works
 | Every source file belongs to a module, a test, or a script. | `tools/archcheck.py` |
 | The domain, use cases, and UI perform no I/O, and take the time and ids from ports. | `tools/archcheck.py`, `forbiddenCalls` |
 | UI reaches ports only through its slice's use cases. | `tools/archcheck.py`, `forbidPorts` |
+| Only the domain's check creates a domain value, such as a note title. | The type in Go and Swift. In TypeScript, `forbiddenCalls` on `__brand` outside the domain, and review for type guards |
 | Utilities and shared UI use no business terms. | `tools/archcheck.py`, `bannedTerms` from `GLOSSARY.md` |
 | The composition root holds only wiring. | `tools/archcheck.py`, `composition` |
-| Violations in the baseline only go down, except through a row in the exceptions table. | `architecture-baseline.json`, `tools/gateguard.py` |
+| Violations in the baseline only go down, except through a row in the exceptions table. | `architecture-baseline.json`, `tools/gateguard.py`, and `tools/archcheck.py` fails while the baseline accepts more than exist |
 | Checks in `checks/` and glossary terms are only added, except through a row in the exceptions table. | `tools/gateguard.py`, and CI runs the existing checks as the base branch has them |
+| Production code adds no lint or type-check suppression, except through a row in the exceptions table. | `tools/gateguard.py` |
+| An exception ends on its expiry date. | `tools/gateguard.py` fails every pull request while an expired row remains |
+| A slice that needs a middleware, such as authentication, keeps it. | `.github/CODEOWNERS` on the composition root, and the composition test |
 | A stored format still loads data that an earlier version wrote. | The adapter's test on a committed sample of that format |
 | A use case makes no business decision, and each rule exists once. | Review, `docs/architecture/review.md` |
 
 ## Exceptions
 
-Each row is a loosening that the owner approved, with the reason and the date it expires. Remove a row when it expires or when its mistake can no longer happen, and fix what it allowed.
+Each row is a loosening that the owner approved, with the reason and the date it expires. Before a row expires, fix what it allowed and remove the row. Remove it sooner when its mistake can no longer happen.
 
 | Exception | Reason | Expires |
 | --- | --- | --- |

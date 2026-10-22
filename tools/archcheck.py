@@ -11,7 +11,8 @@ Usage:
   python3 tools/archcheck.py --write-baseline     accept all current violations
   python3 tools/archcheck.py --module-map FILE    write the module map as Markdown
 
-Exit codes: 0 no new violations, 1 new violations, 2 configuration error.
+Exit codes: 0 no new violations, 1 new violations or a baseline that accepts
+more violations than exist, 2 configuration error.
 Needs Python 3.9 or later and nothing else.
 """
 
@@ -726,17 +727,21 @@ def main():
 
     summary = f"{len(project.modules)} modules, {len(project.production_files)} source files"
     if new:
-        print(f"Architecture check: {len(new)} new violations ({summary}).\n")
+        print(f"Architecture check: {len(new)} new violation{'' if len(new) == 1 else 's'} ({summary}).\n")
         for v in new:
             allowed = baseline.get(v.key, 0)
             print(v.render() + (f"\n  The baseline accepts {allowed} of these." if allowed else "") + "\n")
         print(f"The dependency rule and the module kinds are explained in {DOCS}.")
+    elif stale:
+        print(f"Architecture check: no new violations ({summary}), but the baseline is out of date.")
     else:
         print(f"Architecture check passed ({summary}" + (f", {accepted} accepted by the baseline" if accepted else "") + ").")
     if stale:
-        print(f"\nThe baseline accepts more violations than exist for {len(stale)} entries. "
-              "Run `python3 tools/archcheck.py --write-baseline` to lower it.")
-    return 1 if new else 0
+        print(f"\nThe baseline accepts more violations than exist for {len(stale)} "
+              f"entr{'y' if len(stale) == 1 else 'ies'}, "
+              "so a fixed violation could come back unnoticed. "
+              "Run `python3 tools/archcheck.py --write-baseline` to lower it, and commit the baseline.")
+    return 1 if new or stale else 0
 
 
 if __name__ == "__main__":

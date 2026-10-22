@@ -12,6 +12,11 @@
 # Compiler, linter, and test runner settings.
 __TOOL_CONFIG_LINES__
 
-# The baseline, checks/, and GLOSSARY.md need no owner. tools/gateguard.py fails a pull request
-# that loosens one of them, unless it records an exception in AGENTS.md. The module map is generated.
+# The baseline, checks/, GLOSSARY.md, and the source files need no owner. tools/gateguard.py fails a
+# pull request that loosens a check through them, such as by raising the baseline or adding a
+# suppression comment, unless it records an exception in AGENTS.md. The module map is generated.
 /docs/architecture/modules.md
+
+# The composition root decides which middleware each slice receives, such as authentication.
+# Its changes are a few lines of wiring, so they are cheap to review.
+__COMPOSITION_LINES__

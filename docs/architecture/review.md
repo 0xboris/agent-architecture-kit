@@ -16,3 +16,4 @@ Read the diff against the default branch, such as `git diff main...HEAD`, and th
 10. Are business concepts named as in `GLOSSARY.md`?
 11. Does the change add a layer, wrapper, port, or interface that no reason in `docs/ARCHITECTURE.md` calls for? Does it remove one that a reason calls for? A port with one adapter and a use case with one caller have such a reason, even where a general rule, such as pstack's Minimize Reader Load, would inline them.
 12. Does an API inside the repository keep its old form next to the new one? Callers move and the old form goes in the same change, unless it is a stored format or a wire contract.
+13. Does code outside the domain create a domain value, such as a note title, without the domain's check? In TypeScript, look for a type guard outside the domain that claims a domain type, such as `value is NoteTitle`.

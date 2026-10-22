@@ -14,7 +14,7 @@ export interface Note {
 
 function brokenTitleRule(trimmed: string): NoteTitleError | undefined {
   if (trimmed === '') return 'empty';
-  // Array.from counts code points, so an emoji counts as one character, as in the Go template.
+  // Count code points, as the Go template does. string.length counts UTF-16 units, so most emoji would count twice.
   if (Array.from(trimmed).length > maxTitleLength) return 'tooLong';
   return undefined;
 }

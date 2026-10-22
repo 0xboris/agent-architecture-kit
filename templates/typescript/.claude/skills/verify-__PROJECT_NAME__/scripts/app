@@ -99,7 +99,11 @@ stop() {
 case "${1-}" in
   start) [ $# -eq 1 ] || { usage >&2; exit 2; }; start ;;
   doctor) [ $# -eq 2 ] || { usage >&2; exit 2; }; doctor "$2" ;;
-  call) [ $# -ge 5 ] && [ $# -le 6 ] || { usage >&2; exit 2; }; call "$(run_dir "$2")" "$3" "$4" "$5" "${6-}" ;;
+  call)
+    [ $# -ge 5 ] && [ $# -le 6 ] || { usage >&2; exit 2; }
+    dir=$(run_dir "$2") || exit 2
+    call "$dir" "$3" "$4" "$5" "${6-}"
+    ;;
   stop) [ $# -eq 2 ] || { usage >&2; exit 2; }; stop "$2" ;;
   -h | --help | help) usage ;;
   *) usage >&2; exit 2 ;;
