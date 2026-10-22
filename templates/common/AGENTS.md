@@ -20,16 +20,16 @@ The reference slice is **Notes**. Copy its structure when you add a slice, a use
 - Use the names in `GLOSSARY.md` for business concepts, and add new concepts to it.
 - A bug fix starts with a failing reproduction, committed before the fix. Use a test when a cheap one exists, and otherwise a script or a recorded run against the running app.
 - Change an API inside the repository in one step. Move every caller and delete the old form in the same change. Stored formats and wire contracts change by expanding first, as `docs/ARCHITECTURE.md` describes.
-- Every review of a change here also answers the questions in `docs/architecture/review.md`. When you run `/pstack:interrogate`, add that file to the rubric its reviewers get.
+- Every review of a change here also answers the questions in `docs/architecture/review.md`. When you run `/pstack:interrogate`, pass that file to its reviewers as a context file.
 
 ## Gates
 
 `.github/CODEOWNERS` lists the gate files: `architecture.json`, `check`, `tools/`, `.claude/`, `.github/`, the instruction files, the architecture docs, and the compiler, linter, and test runner settings. A change to them can loosen a check, so the owner reviews it.
 
-- Never change a gate file to make a check pass, and never loosen a check inside a feature pull request.
-- A gate change, such as a new module kind, a fix to a check you think is wrong, a lint setting, a row in the table below, or a skill, goes into its own pull request against main. Link it in your report and keep working on what doesn't depend on it.
-- To tighten a rule, add an executable to `checks/` whose message names the fix, or lower the baseline with `python3 tools/archcheck.py --write-baseline` after you fix a violation. Neither needs the owner. Neither does a verification skill in `.claude/skills/verify-*/`.
-- To change or remove an existing check, or to accept a new violation in the baseline, change the matching row of the table below in the same pull request. The gate guard passes such a pull request only when it changes a gate file, so the owner reviews it.
+- Never change a gate file to make a check pass, and never disable or soften a check to get a pull request green.
+- A gate change, such as a new module kind, a fix to a check you think is wrong, a lint setting, a row in a table below, or a skill, goes into its own pull request against main. Link it in your report and keep working on what doesn't depend on it.
+- To tighten a rule, add an executable to `checks/` whose message names the fix, or lower the baseline with `python3 tools/archcheck.py --write-baseline` after you fix a violation. Neither needs the owner.
+- Loosening a check is the owner's call. That covers raising the baseline, changing or removing an existing check, and removing a glossary term. Propose it in its own pull request against main, with a row in the exceptions table below. The gate guard fails such a pull request without that row, and the owner reviews it.
 
 ## Rules and what enforces them
 
@@ -43,6 +43,14 @@ When agents keep making the same mistake, fix it at the highest level that works
 | UI reaches ports only through its slice's use cases. | `tools/archcheck.py`, `forbidPorts` |
 | Utilities and shared UI use no business terms. | `tools/archcheck.py`, `bannedTerms` from `GLOSSARY.md` |
 | The composition root holds only wiring. | `tools/archcheck.py`, `composition` |
-| Violations that existed at adoption only go down. | `architecture-baseline.json`, `tools/gateguard.py` |
+| Violations in the baseline only go down, except through a row in the exceptions table. | `architecture-baseline.json`, `tools/gateguard.py` |
+| Checks in `checks/` and glossary terms are only added, except through a row in the exceptions table. | `tools/gateguard.py`, and CI runs the existing checks as the base branch has them |
 | A stored format still loads data that an earlier version wrote. | The adapter's test on a committed sample of that format |
 | A use case makes no business decision, and each rule exists once. | Review, `docs/architecture/review.md` |
+
+## Exceptions
+
+Each row is a loosening that the owner approved, with the reason and the date it expires. Remove a row when it expires or when its mistake can no longer happen, and fix what it allowed.
+
+| Exception | Reason | Expires |
+| --- | --- | --- |

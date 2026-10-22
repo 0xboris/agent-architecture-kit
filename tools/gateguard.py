@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
-"""Fails when a pull request loosens a check without the owner's review.
+"""Fails when a pull request loosens a check without an exception the owner approves.
 
 .github/CODEOWNERS sends changes to the files that define the checks to the
-owner. Two kinds of change can only tighten a check, so they need no owner:
-a lower architecture-baseline.json, and a new check in checks/. This guard
-fails a pull request that goes the other way:
+owner. Some files need no owner, because most changes to them only tighten a
+check: architecture-baseline.json, the project checks in checks/, and the
+glossary. This guard catches the changes to them that loosen a check:
 
 - architecture-baseline.json gains an entry or a higher count, including
   when it comes back after a pull request deleted it.
 - an existing file in checks/ changes, loses its executable bit, or goes away.
+- the glossary loses a term, which modules without business meaning may then use.
 
-Such a pull request passes only when it also changes a file that the base
-branch's CODEOWNERS gives an owner, because then the owner reviews it.
+Such a pull request passes only when it also changes AGENTS.md, where the
+exception is recorded, and the base branch's CODEOWNERS gives AGENTS.md an
+owner, so that the owner reviews it. In GitHub Actions, each loosening is
+also posted as an annotation on the pull request.
 
 Usage:
   python3 tools/gateguard.py BASE     compare HEAD with BASE, such as HEAD^1 in CI
@@ -32,6 +35,7 @@ from archcheck import ConfigError, parse_json_with_comments  # noqa: E402
 BASELINE = "architecture-baseline.json"
 CHECKS = "checks/"
 CODEOWNERS = ".github/CODEOWNERS"
+EXCEPTIONS = "AGENTS.md"
 
 
 def git(root, *args):
@@ -63,6 +67,21 @@ def baseline_raises(root, base):
     new = parse_json_with_comments(new_text, BASELINE)
     return [f"raises the baseline ({key}: {old.get(key, 0)} -> {count})"
             for key, count in sorted(new.items()) if count > old.get(key, 0)]
+
+
+def glossary_path(root, base):
+    config = file_at(root, base, "architecture.json")
+    if config is None:
+        return None
+    return parse_json_with_comments(config, f"{base}:architecture.json").get("glossary")
+
+
+def glossary_removals(root, base, glossary):
+    def terms(text):
+        return {line[3:].strip() for line in (text or "").splitlines() if line.startswith("## ")}
+    removed = terms(file_at(root, base, glossary)) - terms(file_at(root, "HEAD", glossary))
+    return [f"removes the glossary term '{term}', which modules without business meaning may then use"
+            for term in sorted(removed)]
 
 
 def owner_rules(text):
@@ -119,13 +138,17 @@ def main():
         return 2
     try:
         changes = changed_files(root, base)
+        changed = {path for _, path in changes}
         problems = []
         for status, path in changes:
             if path.startswith(CHECKS) and status != "A":
                 verb = "deletes" if status == "D" else "changes"
-                problems.append(f"{verb} the existing check {path}")
+                problems.append((path, f"{verb} the existing check {path}"))
             if path == BASELINE:
-                problems += baseline_raises(root, base)
+                problems += [(BASELINE, problem) for problem in baseline_raises(root, base)]
+        glossary = glossary_path(root, base)
+        if glossary in changed:
+            problems += [(glossary, problem) for problem in glossary_removals(root, base, glossary)]
     except ConfigError as error:
         print(f"Gate guard: {error}", file=sys.stderr)
         return 2
@@ -134,18 +157,19 @@ def main():
         print("Gate guard passed: no check was loosened.")
         return 0
     rules = owner_rules(file_at(root, base, CODEOWNERS) or "")
-    gates = [path for _, path in changes if is_owned(rules, path)]
+    recorded = EXCEPTIONS in changed and is_owned(rules, EXCEPTIONS)
+    annotate = os.environ.get("GITHUB_ACTIONS") == "true"
     print(f"Gate guard: this pull request loosens {len(problems)} check{'' if len(problems) == 1 else 's'}.\n")
-    for problem in problems:
+    for path, problem in problems:
         print(f"  It {problem}.")
-    if gates:
-        print("\nIt also changes gate files, so the owner reviews it:\n")
-        for path in gates:
-            print(f"  {path}")
+        if annotate:
+            print(f"::{'warning' if recorded else 'error'} file={path}::This pull request {problem}.")
+    if recorded:
+        print(f"\nIt also changes {EXCEPTIONS}, where the exception is recorded, so the owner reviews it.")
         return 0
-    print("\nThe baseline may only go down, and checks/ may only gain new checks. To loosen a check, "
-          "also change a gate file in the same pull request, such as the check's row in the rule table "
-          "of AGENTS.md, so that the owner reviews it. Otherwise fix the violation, or add a new check.")
+    print(f"\nTo loosen a check, record the exception in the table in {EXCEPTIONS}, with its reason and the "
+          f"date it expires, in the same pull request. {EXCEPTIONS} is a gate file, so the owner reviews it. "
+          "Otherwise fix the violation, or add a new check.")
     return 1
 
 

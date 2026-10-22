@@ -274,7 +274,10 @@ class Project:
         production, test, unmapped = [], [], []
         for root in roots:
             for directory, dirs, files in os.walk(os.path.join(self.root, root)):
-                dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS and not d.startswith("."))
+                # Dot directories are skipped only at the repository root, such as .claude and .scratch.
+                # Production code cannot import them, and a dot directory inside a module is checked.
+                at_root = os.path.normpath(directory) == os.path.normpath(self.root)
+                dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS and not (at_root and d.startswith(".")))
                 for file in sorted(files):
                     if not file.endswith(self.extensions) or file.endswith(".d.ts"):
                         continue

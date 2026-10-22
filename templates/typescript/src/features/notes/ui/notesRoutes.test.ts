@@ -24,8 +24,8 @@ async function withServer(store: NoteStore, run: (url: string) => Promise<void>)
   }
 }
 
-test('listing notes returns them', async () => {
-  const store = await temporaryNoteStore();
+test('listing notes returns them', async (t) => {
+  const store = await temporaryNoteStore(t);
   await store.save(sampleNote(1));
   await withServer(store, async (url) => {
     const response = await fetch(`${url}/notes`);
@@ -35,8 +35,8 @@ test('listing notes returns them', async () => {
   });
 });
 
-test('a posted note is created and listed', async () => {
-  await withServer(await temporaryNoteStore(), async (url) => {
+test('a posted note is created and listed', async (t) => {
+  await withServer(await temporaryNoteStore(t), async (url) => {
     const created = await fetch(`${url}/notes`, { method: 'POST', body: JSON.stringify({ title: 'Groceries' }) });
     assert.equal(created.status, 201);
     assert.equal(((await created.json()) as { title: string }).title, 'Groceries');
@@ -45,8 +45,8 @@ test('a posted note is created and listed', async () => {
   });
 });
 
-test('posting an empty title returns unprocessable', async () => {
-  await withServer(await temporaryNoteStore(), async (url) => {
+test('posting an empty title returns unprocessable', async (t) => {
+  await withServer(await temporaryNoteStore(t), async (url) => {
     const response = await fetch(`${url}/notes`, { method: 'POST', body: JSON.stringify({ title: ' ' }) });
     assert.equal(response.status, 422);
     assert.equal(((await response.json()) as { code: string }).code, 'title_empty');

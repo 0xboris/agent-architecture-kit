@@ -4,8 +4,8 @@ import { temporaryNoteStore } from '../../adapters/filestore/fileNoteStore.testi
 import { RecordingLogger, failingNoteStore, sampleNote } from '../../testsupport/fakes.ts';
 import { LoggingNoteStore } from './loggingNoteStore.ts';
 
-test('a note saved through the middleware is stored and logged', async () => {
-  const store = await temporaryNoteStore();
+test('a note saved through the middleware is stored and logged', async (t) => {
+  const store = await temporaryNoteStore(t);
   const logger = new RecordingLogger();
   const note = sampleNote(1);
 

@@ -1,8 +1,6 @@
 import type { Result } from '../utilities/result.ts';
 
-declare const noteTitleBrand: unique symbol;
-
-export type NoteTitle = string & { readonly [noteTitleBrand]: true };
+export type NoteTitle = string & { readonly __brand: 'NoteTitle' };
 
 export const maxTitleLength = 200;
 
@@ -27,8 +25,8 @@ export function isNoteTitle(value: string): value is NoteTitle {
 
 export function parseNoteTitle(raw: string): Result<NoteTitle, NoteTitleError> {
   const trimmed = raw.trim();
+  if (isNoteTitle(trimmed)) return { ok: true, value: trimmed };
   const broken = brokenTitleRule(trimmed);
-  if (broken !== undefined) return { ok: false, error: broken };
-  if (!isNoteTitle(trimmed)) throw new Error('isNoteTitle and brokenTitleRule disagree.');
-  return { ok: true, value: trimmed };
+  if (broken === undefined) throw new Error('isNoteTitle rejected a title that breaks no rule.');
+  return { ok: false, error: broken };
 }

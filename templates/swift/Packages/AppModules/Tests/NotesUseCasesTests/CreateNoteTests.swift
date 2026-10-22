@@ -5,13 +5,10 @@ import Persistence
 import Testing
 import TestSupport
 
-private func temporaryNoteStore() -> FileNoteStore {
-    FileNoteStore(fileURL: FileManager.default.temporaryDirectory
-        .appending(path: UUID().uuidString).appending(path: "notes.json"))
-}
-
 @Test func createdNoteGetsIDAndTimeFromThePortsAndIsStored() async throws {
-    let store = temporaryNoteStore()
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = FileNoteStore(fileURL: directory.appending(path: "notes.json"))
     let time = FakeTimeSource(now: Date(timeIntervalSince1970: 500))
     let createNote = CreateNote(store: store, time: time, ids: SequentialIDGenerator())
 
@@ -23,7 +20,9 @@ private func temporaryNoteStore() -> FileNoteStore {
 }
 
 @Test func invalidTitleIsNotStored() async throws {
-    let store = temporaryNoteStore()
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = FileNoteStore(fileURL: directory.appending(path: "notes.json"))
     let createNote = CreateNote(store: store, time: FakeTimeSource(), ids: SequentialIDGenerator())
 
     await #expect(throws: NoteTitle.Invalid.empty) { try await createNote(title: "") }

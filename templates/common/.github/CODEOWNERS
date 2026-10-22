@@ -12,8 +12,6 @@
 # Compiler, linter, and test runner settings.
 __TOOL_CONFIG_LINES__
 
-# These need no owner. tools/gateguard.py fails a pull request that raises the baseline or changes
-# or deletes an existing check in checks/, unless it also changes a gate file. A verification skill
-# only adds proof, and the module map is generated.
-/.claude/skills/verify-*/
+# The baseline, checks/, and GLOSSARY.md need no owner. tools/gateguard.py fails a pull request
+# that loosens one of them, unless it records an exception in AGENTS.md. The module map is generated.
 /docs/architecture/modules.md

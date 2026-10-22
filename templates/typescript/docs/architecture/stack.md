@@ -32,7 +32,7 @@ The kit's template uses Node's built-in modules only, plus TypeScript 7 and oxli
 
 ## Lint
 
-oxlint with type-aware rules, in `.oxlintrc.json`. oxlint-tsgolint gives the type-aware rules their type information. It is built on TypeScript 7, so it reads `tsconfig.json` with the same compiler as `tsc`. typescript-eslint supports only TypeScript below 6.1, so it does not work here.
+oxlint with type-aware rules, in `.oxlintrc.json`. `./check` runs it with `--disable-nested-config`, so a settings file in a subfolder cannot switch rules off. oxlint-tsgolint gives the type-aware rules their type information. It is built on TypeScript 7, so it reads `tsconfig.json` with the same compiler as `tsc`. typescript-eslint supports only TypeScript below 6.1, so it does not work here.
 
 - The rules are the correctness category plus the rules of ESLint's and typescript-eslint's recommended sets, including the type-aware ones of `recommendedTypeChecked`.
 - `consistent-type-assertions` with `assertionStyle: "never"` rejects type assertions, such as `'x' as NoteTitle`, in all production code. A branded value comes from its type guard, such as `isNoteTitle`. Tests, `*.testing.ts` files, and test support may assert. `as const` is allowed everywhere. The rule's message suggests a type annotation instead. For a branded type, use its type guard or parse function.

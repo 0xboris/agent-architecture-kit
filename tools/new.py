@@ -38,15 +38,16 @@ def fill(text, values):
 
 # ----------------------------------------------------------- init, adopt
 
-# Compiler, linter, and test runner settings, and the package manager's files. An
-# agent could weaken a check by changing them, so they are gate files too. In
-# TypeScript, package.json can run an install script before ./check and pins the
-# versions of the linter and the compiler.
+# Compiler, linter, and test runner settings, and the package manager's files,
+# wherever they sit. An agent could weaken a check by changing them, so they are
+# gate files too. A nested settings file can switch off rules for its folder, a
+# nested go.mod or a go.work can hide packages from go vet and go test, and in
+# TypeScript, package.json can run an install script before ./check.
 TOOL_CONFIG_PATHS = {
-    "swift": ["/.swiftlint.yml"],
-    "go": ["/.golangci.yml", "/.golangci.yaml"],
-    "typescript": ["/package.json", "/package-lock.json", "/pnpm-lock.yaml", "/tsconfig*.json", "/.oxlintrc.json",
-                   "/oxlint.config.*", "/eslint.config.*", "/vitest.config.*", "/pnpm-workspace.yaml", "/.npmrc"],
+    "swift": ["**/.swiftlint.yml"],
+    "go": ["**/go.mod", "/go.work", "**/.golangci.yml", "**/.golangci.yaml"],
+    "typescript": ["**/package.json", "/package-lock.json", "/pnpm-lock.yaml", "**/tsconfig*.json", "**/.oxlintrc.json",
+                   "**/oxlint.config.*", "**/eslint.config.*", "**/vitest.config.*", "/pnpm-workspace.yaml", "**/.npmrc"],
 }
 
 
@@ -78,7 +79,7 @@ def copy_tree(source, dest, values, overwrite, report):
 def copy_kit_files(kit, dest, language, values, overwrite, report):
     copy_tree(os.path.join(kit, "templates", "common"), dest, values, overwrite, report)
     os.makedirs(os.path.join(dest, "tools"), exist_ok=True)
-    for tool in ("archcheck.py", "gateguard.py", "agent-stop-check.sh"):
+    for tool in ("archcheck.py", "gateguard.py", "run-base-checks.sh", "agent-stop-check.sh"):
         target = os.path.join(dest, "tools", tool)
         shutil.copy2(os.path.join(kit, "tools", tool), target)
         os.chmod(target, 0o755)

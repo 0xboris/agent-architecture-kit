@@ -4,8 +4,8 @@ import { temporaryNoteStore } from '../../../adapters/filestore/fileNoteStore.te
 import { FakeClock, SequentialIds, failingNoteStore } from '../../../testsupport/fakes.ts';
 import { createNote } from './createNote.ts';
 
-test('a created note gets its id and time from the ports and is stored', async () => {
-  const store = await temporaryNoteStore();
+test('a created note gets its id and time from the ports and is stored', async (t) => {
+  const store = await temporaryNoteStore(t);
   const now = new Date('2025-03-01T09:00:00Z');
 
   const result = await createNote({ store, clock: new FakeClock(now), ids: new SequentialIds() }, 'Groceries');
@@ -16,8 +16,8 @@ test('a created note gets its id and time from the ports and is stored', async (
   assert.deepEqual(await store.allNotes(), [result.value]);
 });
 
-test('an invalid title is not stored', async () => {
-  const store = await temporaryNoteStore();
+test('an invalid title is not stored', async (t) => {
+  const store = await temporaryNoteStore(t);
 
   const result = await createNote({ store, clock: new FakeClock(), ids: new SequentialIds() }, '');
 

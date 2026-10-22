@@ -5,8 +5,8 @@ import { FakeClock, RecordingLogger, SequentialIds } from '../testsupport/fakes.
 import { startTestServer } from '../testsupport/http.ts';
 import { createApp } from './container.ts';
 
-test('the notes slice stores through the logging middleware', async () => {
-  const store = await temporaryNoteStore();
+test('the notes slice stores through the logging middleware', async (t) => {
+  const store = await temporaryNoteStore(t);
   const logger = new RecordingLogger();
   const app = createApp({ noteStore: store, clock: new FakeClock(), ids: new SequentialIds(), logger });
   const server = await startTestServer(app.handle);

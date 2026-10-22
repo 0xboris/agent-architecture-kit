@@ -1,6 +1,6 @@
 ---
 name: verify-__PROJECT_NAME__
-description: Drives the __APP_NAME__ HTTP service the way a client does, and keeps each request and response as evidence. Use it to show that a change works in the running service, to reproduce a bug before fixing it, and wherever a pstack playbook verifies on the real surface.
+description: Drives the __APP_NAME__ HTTP service the way a client does, and keeps each request and response as evidence. Use it to show that a change works in the running service, to reproduce a bug before fixing it, and wherever a pstack playbook proves a change in the running app.
 ---
 
 # Verify __APP_NAME__

@@ -8,9 +8,6 @@ import TestSupport
 
 @MainActor
 struct NotesViewModelTests {
-    let store = FileNoteStore(fileURL: FileManager.default.temporaryDirectory
-        .appending(path: UUID().uuidString).appending(path: "notes.json"))
-
     func makeViewModel(store: any NoteStore) -> NotesViewModel {
         NotesViewModel(
             createNote: CreateNote(store: store, time: FakeTimeSource(), ids: SequentialIDGenerator()),
@@ -19,6 +16,9 @@ struct NotesViewModelTests {
     }
 
     @Test func addingANoteStoresItReloadsAndClearsTheDraft() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = FileNoteStore(fileURL: directory.appending(path: "notes.json"))
         let viewModel = makeViewModel(store: store)
         viewModel.draftTitle = "Groceries"
 
@@ -31,6 +31,9 @@ struct NotesViewModelTests {
     }
 
     @Test func emptyTitleShowsAMessageAndStoresNothing() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = FileNoteStore(fileURL: directory.appending(path: "notes.json"))
         let viewModel = makeViewModel(store: store)
         viewModel.draftTitle = "  "
 
