@@ -52,7 +52,7 @@ TOOL_CONFIG_PATHS = {
 }
 
 # The composition root decides which middleware each slice receives, such as
-# authentication, so dropping it is a loosening that no check sees.
+# authentication. No check sees a slice lose one, so the owner reviews it.
 COMPOSITION_PATHS = {
     "swift": ["/App/", "/Packages/AppModules/Sources/AppComposition/"],
     "go": ["/cmd/", "/internal/app/"],
@@ -158,7 +158,7 @@ def adopt(args):
     values = placeholder_values(args.language, args)
     if args.language == "go" and os.path.exists(os.path.join(dest, "go.mod")):
         with open(os.path.join(dest, "go.mod"), encoding="utf-8") as f:
-            values["__GO_MODULE__"] = next((l.split()[1] for l in f if l.startswith("module ")), values["__GO_MODULE__"])
+            values["__GO_MODULE__"] = next((line.split()[1] for line in f if line.startswith("module ")), values["__GO_MODULE__"])
     report = []
     copy_kit_files(kit, dest, args.language, values, False, report)
     language_dir = os.path.join(kit, "templates", args.language)
@@ -185,16 +185,16 @@ def adopt(args):
     print(f"\nAdded the architecture kit to {dest}.\n\nNext:")
     for step in [
         "Edit the modules in architecture.json so that every source directory maps to a kind.",
-        "Run `python3 tools/archcheck.py` until no file is reported as unmapped.",
+        "Run `python3 tools/archcheck.py` until it reports no unmapped file.",
         "Run `python3 tools/archcheck.py --write-baseline` to accept the existing violations.",
         "Describe the project's libraries in docs/architecture/stack.md, and allow them per kind in architecture.json.",
     ] + ([
         "Add the devDependencies oxlint and oxlint-tsgolint at the versions in the kit's templates/typescript/package.json, "
-        "edit the paths in .oxlintrc.json to match the project, and fix what `npx oxlint` reports.",
+        "edit the paths in .oxlintrc.json to match the project, and fix what `npx oxlint --disable-nested-config` reports.",
     ] if args.language == "typescript" else []) + [
         f"Adjust the build and test commands in {check_target} to this project, and merge back the project's own steps.",
-        f"Adjust .github/workflows/{workflow_target} to the project's toolchain, and merge in its other CI jobs. "
-        "Keep its steps: the gate guard, the base branch's checks, ./check, and the step that fails when ./check changed a file.",
+        f"Adjust .github/workflows/{workflow_target} to the project's toolchain, and merge in the project's other CI jobs. "
+        "Keep the kit's steps: the gate guard, the base branch's checks, ./check, and the step that fails when ./check changed a file.",
         "If CLAUDE.md already existed, add the line `@AGENTS.md` at its top.",
         "Name a reference slice in AGENTS.md: the existing slice that best follows docs/ARCHITECTURE.md, or one you rebuild in that shape.",
         "Run /pstack:create-verification-skill, so agents can drive the app and keep the evidence.",

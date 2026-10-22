@@ -12,7 +12,7 @@ step() {
     echo "ok    $name"
   else
     echo "FAIL  $name   (full log: .check/$name.log)"
-    grep -E "error:|warning:|✘|FAIL|failed|violation|Fix:|^import|^external|^call|^term|^composition|^control-flow|^unmapped|^cycle|^  " ".check/$name.log" | head -40
+    grep -E "error:|warning:|✘|FAIL|failed|violation|Fix:|^import|^external|^call|^term|^port|^public-entry|^app|^unresolved|^test-import|^composition|^control-flow|^unmapped|^cycle|^  " ".check/$name.log" | head -40
     status=1
   fi
 }

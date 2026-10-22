@@ -1,6 +1,6 @@
 // The linter's rules. oxlint runs them, and oxlint-tsgolint, which is built on
 // TypeScript 7, gives the type-aware rules their type information. This is a
-// gate file: change it on purpose, with the owner's approval.
+// gate file, so the owner reviews every change to it.
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["eslint", "typescript", "oxc"],
@@ -31,7 +31,7 @@
 
     // Type-aware rules, as in typescript-eslint's recommendedTypeChecked. The no-unsafe
     // rules stop an `any` value, such as the result of JSON.parse, from flowing into a
-    // typed value: parse outside data with a parse function instead.
+    // typed value. Parse outside data with a parse function instead.
     "typescript/await-thenable": "error",
     "typescript/no-array-delete": "error",
     "typescript/no-base-to-string": "error",

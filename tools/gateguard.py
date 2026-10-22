@@ -99,7 +99,7 @@ def baseline_raises(root, base):
         return []
     old_text = file_at(root, base, BASELINE)
     if old_text is None and file_at(root, base, "tools/gateguard.py") is None:
-        return []
+        return []  # this pull request adds the kit, and its baseline accepts the existing violations
     old = parse_json_with_comments(old_text, f"{base}:{BASELINE}") if old_text is not None else {}
     new = parse_json_with_comments(new_text, BASELINE)
     return [f"raises the baseline ({key}: {old.get(key, 0)} -> {count})"
@@ -136,7 +136,7 @@ def added_suppressions(root, base, config, changes):
 
 
 def exception_rows(text):
-    """The rows of the exceptions table in AGENTS.md, as lists of cells."""
+    """The rows of the exceptions table in AGENTS.md, as lists of cells, without the header and separator rows."""
     rows, inside = [], False
     for line in (text or "").splitlines():
         if line.startswith("## "):
@@ -149,11 +149,11 @@ def exception_rows(text):
 
 
 def expiry(row):
-    match = DATE.fullmatch(row[2]) if len(row) >= 3 else None
-    if match is None:
+    """The date in the row's third cell, or None when that cell holds no valid YYYY-MM-DD date."""
+    if len(row) < 3 or not DATE.fullmatch(row[2]):
         return None
     try:
-        return datetime.date.fromisoformat(match.group(0))
+        return datetime.date.fromisoformat(row[2])
     except ValueError:
         return None
 

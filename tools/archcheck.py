@@ -121,7 +121,7 @@ def name_pattern_matches(name, pattern):
 
 
 def strip_source(code, language, keep_strings):
-    """Blank out comments, and string contents unless keep_strings. Keeps line breaks."""
+    """Blanks out comments, and string contents unless keep_strings. Keeps line breaks."""
     out, i, n = [], 0, len(code)
 
     def blank(text):
@@ -360,7 +360,8 @@ class Project:
         return None
 
     def resolve(self, rel, target):
-        """Returns ('module', Module) for project imports, ('external', name) otherwise, ('missing', path)."""
+        """('module', Module) for a project import, ('test-file', path) for a test or script, ('missing', path)
+        for a path in no module, and ('external', name) otherwise."""
         if self.language == "swift":
             module = self.by_name.get(target)
             return ("module", module) if module else ("external", target)
@@ -556,7 +557,7 @@ def check(project):
                     violations.append(Violation(
                         "unresolved", f"unresolved:{rel}->{value}", rel, line,
                         f"{module.label()} imports '{value}', which belongs to no module in architecture.json.",
-                        "Import code from a mapped module. Configuration and ignored files are not imported by modules."))
+                        "Import code from a mapped module. Modules never import configuration or ignored files."))
                 elif kind_of == "test-file":
                     violations.append(Violation(
                         "test-import", f"test-import:{rel}->{value}", rel, line,
@@ -600,7 +601,7 @@ def check(project):
                 if not matches_any(inner, composition.get("allowedFiles", ["**"])):
                     violations.append(Violation(
                         "composition", f"composition-file:{rel}", rel, None,
-                        f"{module.label()} holds wiring only, in the files that architecture.json lists.",
+                        f"{module.label()} allows only the wiring files that architecture.json lists, and '{inner}' is not one of them.",
                         "Put feature code into a slice, in the shape of the reference slice that AGENTS.md names."))
                 if not matches_any(inner, composition.get("controlFlowAllowedIn", [])):
                     allowed_lines = [re.compile(p) for p in composition.get("controlFlowAllowedPatterns", [])]
@@ -731,7 +732,7 @@ def main():
         for v in new:
             allowed = baseline.get(v.key, 0)
             print(v.render() + (f"\n  The baseline accepts {allowed} of these." if allowed else "") + "\n")
-        print(f"The dependency rule and the module kinds are explained in {DOCS}.")
+        print(f"{DOCS} explains the dependency rule and the module kinds.")
     elif stale:
         print(f"Architecture check: no new violations ({summary}), but the baseline is out of date.")
     else:
