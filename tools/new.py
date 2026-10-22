@@ -38,19 +38,13 @@ def fill(text, values):
 
 # ----------------------------------------------------------- init, adopt
 
-COMPOSITION_PATHS = {
-    "swift": ["/App/", "/Packages/AppModules/Sources/AppComposition/"],
-    "go": ["/cmd/", "/internal/app/"],
-    "typescript": ["/src/app/"],
-}
-
-
-# Compiler, linter, and test runner settings. An agent could weaken a check by
-# changing them, so they are gate files too.
+# Compiler, linter, and test runner settings, and the package manager's install
+# settings. An agent could weaken a check by changing them, so they are gate files
+# too. Dependencies are not: architecture.json decides where a package may be used.
 TOOL_CONFIG_PATHS = {
     "swift": ["/.swiftlint.yml"],
-    "go": ["/go.mod", "/.golangci.yml", "/.golangci.yaml"],
-    "typescript": ["/package.json", "/tsconfig*.json", "/.oxlintrc.json", "/oxlint.config.*", "/eslint.config.*", "/vitest.config.*", "/pnpm-workspace.yaml", "/.npmrc"],
+    "go": ["/.golangci.yml", "/.golangci.yaml"],
+    "typescript": ["/tsconfig*.json", "/.oxlintrc.json", "/oxlint.config.*", "/eslint.config.*", "/vitest.config.*", "/pnpm-workspace.yaml", "/.npmrc"],
 }
 
 
@@ -96,7 +90,6 @@ def placeholder_values(language, args):
     return {
         "__LANGUAGE__": language,
         "__OWNER__": args.owner,
-        "__COMPOSITION_LINES__": "\n".join(f"{path:<30}{args.owner}" for path in COMPOSITION_PATHS[language]),
         "__TOOL_CONFIG_LINES__": "\n".join(f"{path:<30}{args.owner}" for path in TOOL_CONFIG_PATHS[language]),
         "__APP_NAME__": args.name,
         "__PROJECT_NAME__": separated(args.name, "-"),

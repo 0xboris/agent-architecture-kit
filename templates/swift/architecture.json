@@ -5,6 +5,7 @@
   "language": "swift",
   "sourceRoots": ["."],
   "testFiles": ["**/Tests/**"],
+  "scriptFiles": ["scripts/**", "checks/**"],
   "ignore": ["**/Package.swift"],
   "glossary": "GLOSSARY.md",
   "portFiles": ["Packages/AppModules/Sources/Domain/Ports/*.swift"],

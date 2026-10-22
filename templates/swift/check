@@ -26,4 +26,10 @@ if command -v swiftlint > /dev/null; then
   step lint swiftlint lint --strict --quiet
 fi
 
+# Project checks: each executable in checks/ is one step. Agents add them. Only the owner changes or removes them.
+for project_check in checks/*; do
+  case "$project_check" in *.md|"checks/*") continue ;; esac
+  step "$(basename "$project_check")" "./$project_check"
+done
+
 exit $status

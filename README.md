@@ -15,7 +15,7 @@ docs/architecture/<language>.md   the language rules for Swift, Go, and TypeScri
 tools/archcheck.py                the architecture check
 tools/new.py                      creates projects and adopts existing ones (runs from the kit only)
 tools/agent-stop-check.sh         Claude Code Stop hook that runs ./check
-tools/gateguard.py                CI check that keeps gate-file changes out of branches other than main
+tools/gateguard.py                CI check that keeps the baseline and the project checks from loosening
 tools/vendor_pstack.py            builds the kit's copy of pstack (runs from the kit only)
 .claude-plugin/marketplace.json   the kit as a Claude Code plugin marketplace
 plugins/                          the kit's copy of pstack, and how it differs from upstream
@@ -27,12 +27,12 @@ examples/                         pages that show the architecture in example pr
 Each project receives:
 
 - **The docs.** `docs/ARCHITECTURE.md`, its language guide, `docs/architecture/stack.md` for the project's libraries, and the generated module map.
-- **The tools.** `tools/archcheck.py`, the Stop hook script, the gate guard, and `./check`, the one command that verifies everything.
+- **The tools.** `tools/archcheck.py`, the Stop hook script, the gate guard, and `./check`, the one command that verifies everything. It also runs every executable in `checks/`, where agents add project checks.
 - **The configuration.** `architecture.json` maps directories to module kinds and sets the rules for each kind, and `architecture-baseline.json` holds the violations you have accepted.
 - **Agent instructions.** `AGENTS.md`, which names the reference slice, a `CLAUDE.md` that imports it, and a `README.md` to fill in with what the project does.
 - **Claude Code integration in `.claude/`.** The Stop hook, a path-scoped rule that points agents to the docs, the `new-slice` and `new-port` checklists, and the `architecture-reviewer` subagent.
-- **Code owners.** `.github/CODEOWNERS` covers the gate files and the composition root.
-- **CI.** `.github/workflows/check.yml` runs `./check`, and the gate guard on pull requests into branches other than main.
+- **Code owners.** `.github/CODEOWNERS` covers the gate files, which define the checks.
+- **CI.** `.github/workflows/check.yml` runs `./check` and, on every pull request, the gate guard. The guard fails when the baseline rises or an existing project check changes or goes away.
 - **The Notes reference slice.** A small working feature with a domain rule, a port, middleware, a slice, an adapter, tests that run against the real file store in a temporary directory, a file that pins the stored format, and a composition test.
 
 ## Requirements
@@ -88,7 +88,7 @@ python3 path/to/kit/tools/new.py adopt go ~/Dev/legacy-service --owner @your-git
 5. **Describe the stack and pick a reference.** Rewrite `docs/architecture/stack.md` for the project's libraries, and allow them per kind in `architecture.json`. Name a reference slice in `AGENTS.md`: the existing slice that best follows the architecture, or one you rebuild in that shape, using the kit's Notes slice as the model.
 6. **Write the glossary.** List the business concepts the code already uses, one heading each.
 7. **Put new work in the new shape.** New capabilities become slices in the shape of the reference slice. New rules go into the domain. New I/O goes behind ports.
-8. **Fix old code as you touch it.** When a change touches a module with violations, fix them in a separate commit and run `--write-baseline` to lower the counts. The baseline only ever goes down.
+8. **Fix old code as you touch it.** When a change touches a module with violations, fix them in a separate commit and run `--write-baseline` to lower the counts. The baseline only ever goes down. The gate guard fails a pull request that raises it, and lowering it needs no owner.
 
 The language guides describe the template layout. In a project with a different layout, either move toward the template layout over time, or keep the existing layout mapped in `architecture.json` and name as the reference the slice that follows the architecture best.
 
@@ -100,9 +100,10 @@ Agents read `AGENTS.md` at the start of each task and the architecture docs when
 
 Your review stays small:
 
-- **Diffs to gate files.** `CODEOWNERS` sends you every change to `architecture.json`, the baseline, `check`, `tools/`, `.claude/`, `.github/`, and the instruction files. An agent that weakens a check shows up here.
-- **Diffs to the composition root.** Legitimate changes are a few lines of wiring. Anything larger is feature code in the wrong place.
-- **Ports and stored formats.** New ports, renamed stored or sent fields, and migrations deserve a careful look, because no test catches a format that only breaks old data.
+- **Diffs to gate files.** `CODEOWNERS` sends you every change to `architecture.json`, `check`, `tools/`, `.claude/`, `.github/`, the instruction files, and the compiler, linter, and test runner settings. An agent that weakens a check shows up here. Changes that only tighten a check need no review: a lower baseline, a new project check in `checks/`, and a verification skill.
+- **New ports, stored formats, and wire contracts.** The first version of a format is the one old data will be in. A test that loads a committed file in each stored format catches a renamed field, but not a format that was wrong from the start.
+
+The composition root needs no owner. The architecture check limits it to its files, to wiring without control flow, and to a line limit.
 
 When agents keep making the same mistake, improve the tooling instead of adding prose. Preferred fixes, in order:
 
@@ -140,7 +141,7 @@ Claude Code registers the marketplace after a contributor accepts the workspace 
 The architecture holds in a pstack session for these reasons:
 
 - **The check.** The Stop hook runs `./check` in the checkout or git worktree the session works in. UI that uses a port fails the check, so an agent cannot replace a use case by calling its port from the UI.
-- **The gates.** Branch protection and `CODEOWNERS` hold every change to a gate file on main for your review, and the gate guard keeps gate changes out of feature branches. pstack's autonomous playbooks merge pull requests on their own but never bypass an approval that GitHub enforces. This works only when agents open pull requests under their own account, as described under "Start a new project".
+- **The gates.** Branch protection and `CODEOWNERS` hold every change to a gate file on main for your review, and the gate guard keeps the baseline and the project checks from loosening. pstack's autonomous playbooks merge pull requests on their own but never bypass an approval that GitHub enforces. This works only when agents open pull requests under their own account, as described under "Start a new project".
 - **The kit's copy of pstack.** Its rules keep the layers that `docs/ARCHITECTURE.md` requires, and it treats an owner's gate as a gate, not as a tooling failure.
 - **The precedence section.** The "Skills and plugins" section in `AGENTS.md` covers what no edit does: a failing check is a finding in the code, and rules and checks that a workflow writes are gate changes. Claude Code loads it in every session and in pstack's subagents.
 - **The reviewer.** The `architecture-reviewer` subagent runs before each pull request, next to pstack's own reviews.
@@ -154,16 +155,18 @@ Projects created before 2026-10-21 get all of this, the port check and the gate 
 3. Add the gate guard step and `fetch-depth: 2` to `.github/workflows/check.yml`, as in the language template.
 4. Copy the "Skills and plugins" section of `templates/common/AGENTS.md` into the project's `AGENTS.md`, and question 13 of `templates/common/.claude/agents/architecture-reviewer.md` into the project's reviewer.
 
-## Autopilot on a feature branch
+## Autopilot with pstack
 
-Agents can build a large feature on their own: several tracks in parallel, each delivered as pull requests into one feature branch, and one pull request from the feature branch into main at the end, which you review and approve. pstack's Autopilot-full playbook comes closest, with the feature branch in place of main. These steps keep the architecture intact during the run, and keep the final review small enough to be a real review.
+pstack runs large work on its own with two playbooks. Both keep the kit's gates, because every pull request ends up merging into main, where branch protection and `CODEOWNERS` apply.
 
-1. **Review the foundation before the tracks start.** The first pull request into the feature branch holds the shared shape: glossary entries, domain types and rule signatures, new ports and their result types, changes to stored formats and wire contracts, and an empty slice with its wiring for each track. Every track builds on it, so a mistake here costs the most when it is found late.
-2. **Let the tracks run.** Slices never import each other, so tracks mostly touch different files, apart from the domain and the composition root. A track's pull request merges into the feature branch once CI passes, the architecture reviewer has run, and the workflow's own verification is done.
-3. **Keep the gates.** Branch protection usually covers only main, so the feature branch has no owner review. The gate guard fails a pull request into any branch other than main that changes a gate file, so agents put gate changes into their own pull request against main and wait for you on that track. GitHub runs the workflow from the pull request itself, so a pull request that deletes the guard step also passes. That deletion is a change to `.github/`, so it appears among the gate files of the final review.
-4. **Merge, never rebase, the shared branch.** Merge track pull requests with merge commits, so that each track stays visible, and merge main into the feature branch regularly. Several agents work from the branch, so its history must not change under them.
-5. **Ask for a review guide in the final pull request.** Its description lists the gate-file changes, which should be none; the composition-root diff; the ports, stored formats, and wire contracts that changed after the foundation review; and each track, with links to its pull requests and their verification. Review those closely and skim the rest, which the check, the tests, and the verifiers have covered.
-6. **Let an agent identity open the final pull request.** GitHub does not let you approve your own pull request.
+- **Autopilot-stack** builds a queue of changes as one linear stack of pull requests, each with a verdict from an agent that did not write it, and stops. You review the stack and land it. Use it when you want to see the work before it lands, or when the changes depend on each other: `/pstack:poteto-mode autopilot these changes but stack them, don't ship.`
+- **Autopilot-full** runs independent pull requests to merged, with one owner agent per pull request. An owner merges only after a swarm of verifiers has proven its code. A pull request that changes a gate file still waits for your approval, which no agent gives or bypasses.
+
+Before a run on a large feature:
+
+1. **Review the foundation first.** Make the first pull request hold the shared shape: glossary entries, domain types and rule signatures, new ports and their result types, changes to stored formats and wire contracts, and an empty slice with its wiring for each track. Every later pull request builds on it, so a mistake here costs the most when it is found late.
+2. **Keep gate changes out of the feature work.** A new kind in `architecture.json` or a changed lint setting goes into its own pull request against main, which waits for you. Plan the run so that nothing else waits on it.
+3. **Let agent identities open the pull requests.** GitHub does not let you approve your own pull request.
 
 Try it first on a medium feature with two or three tracks before you trust it overnight. It has not been tried with the kit yet.
 
@@ -184,8 +187,8 @@ Frameworks that want to own the structure fit badly:
 Lines that start with `//` are comments.
 
 - **`language`.** `swift`, `go`, or `typescript`.
-- **`sourceRoots`.** Directories to scan. The templates scan the whole repository (`.`), so a source file outside every module fails as unmapped.
-- **`testFiles` and `ignore`.** Glob patterns, matched against paths from the repository root. `*` stays within one directory and `**` crosses directories, so `*.config.ts` matches only files in the root. Test files are exempt from the import rules.
+- **`sourceRoots`.** Directories to scan. The templates scan the whole repository (`.`), so a source file outside every module fails as unmapped. Directories whose names start with a dot are skipped, so prototypes go into `.scratch/`, which `.gitignore` lists.
+- **`testFiles`, `scriptFiles`, and `ignore`.** Glob patterns, matched against paths from the repository root. `*` stays within one directory and `**` crosses directories, so `*.config.ts` matches only files in the root. Test files and script files, such as a codemod in `scripts/` or a project check in `checks/`, are exempt from the import rules, and production code may not import them.
 - **`glossary`.** The glossary file. Its level-2 headings are the terms banned from modules with `"bannedTerms": "glossary"`. The check splits identifiers into words, so the heading "API key" matches `apiKey`, `APIKey`, `api_key`, and `apiKeys`. A one-word heading that is also a common word, such as "Sync", matches identifiers like `readFileSync`, so prefer specific headings such as "Sync run".
 - **`modules`.** Maps directories to kinds.
   - `path` may use `*` for one directory level, and `{1}` in `name` or `slice` inserts what the first `*` matched.
@@ -274,5 +277,5 @@ Not tested:
 - **GitHub.** The GitHub Actions workflows were not run, and `CODEOWNERS` enforcement was not tried.
 - **The Xcode app.** The project steps for Swift and an iOS build of the app.
 - **Larger code.** Adoption in a real, larger codebase, and the check's speed on a large repository.
-- **pstack in a kit project.** Nobody has run pstack's playbooks in a kit project, and the autopilot workflow on a feature branch has not been tried.
+- **pstack in a kit project.** Nobody has run pstack's playbooks in a kit project, and its autopilot playbooks have not been tried here.
 - **Other setups.** TypeScript path aliases, TypeScript frontends or frameworks such as Express or Fastify, Core Data or SwiftData adapters, and Windows.

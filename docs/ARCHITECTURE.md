@@ -193,9 +193,10 @@ When the code needs something its module may not import:
   - imports between apps, and imports into a module that bypass its public entry
   - ports used in UI, which reaches them only through use cases
   - cycles
-- **The baseline** (`architecture-baseline.json`) records violations that existed before the rules were adopted. The check fails only when a change adds a violation. When code is fixed, the baseline is lowered.
-- **Gate files** define the checks: `architecture.json`, the baseline, `check`, `tools/`, `.claude/`, `.github/`, and the instruction files. A code-owner rule requires the owner's review for every change to them. Never change a gate file to make a check pass.
-- **The gate guard** (`tools/gateguard.py`) runs in CI on pull requests into any branch other than main, such as a feature branch, and fails when one changes a gate file. Gate changes go into their own pull request against main, where the owner reviews them.
+- **The baseline** (`architecture-baseline.json`) records violations that existed before the rules were adopted. The check fails only when a change adds a violation. When code is fixed, lower the baseline in the same change with `python3 tools/archcheck.py --write-baseline`.
+- **Project checks** in `checks/` are executables that `./check` runs, one step each. Add one when a mistake keeps coming back and neither `architecture.json` nor the linter can catch it. Its message names the fix.
+- **Gate files** define the checks: `architecture.json`, `check`, `tools/`, `.claude/`, `.github/`, the instruction files, the architecture docs, and the compiler, linter, and test runner settings. A change to them can loosen a check, so a code-owner rule requires the owner's review. Never change a gate file to make a check pass.
+- **The gate guard** (`tools/gateguard.py`) runs in CI on every pull request. It fails when the baseline gains a violation, or when an existing file in `checks/` changes or goes away. Lowering the baseline and adding a check only tighten the rules, so neither needs the owner.
 - **The Stop hook** runs `./check` before an agent finishes a task that changed files.
 - **The architecture reviewer** subagent checks the judgment calls in this document before a pull request is opened.
 

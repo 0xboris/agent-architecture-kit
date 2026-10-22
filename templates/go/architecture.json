@@ -5,6 +5,7 @@
   "language": "go",
   "sourceRoots": ["."],
   "testFiles": ["**/*_test.go"],
+  "scriptFiles": ["scripts/**", "checks/**"],
   "ignore": [],
   "glossary": "GLOSSARY.md",
   "portFiles": ["internal/domain/ports.go"],

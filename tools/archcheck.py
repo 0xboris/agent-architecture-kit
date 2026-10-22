@@ -259,9 +259,13 @@ class Project:
                     best = module
         return best
 
+    def dev_patterns(self):
+        """Test files and development scripts. The import rules skip them, and production code may not import them."""
+        return self.config.get("testFiles", []) + self.config.get("scriptFiles", [])
+
     def _collect_files(self):
         roots = self.config.get("sourceRoots", ["."])
-        tests = self.config.get("testFiles", [])
+        tests = self.dev_patterns()
         ignore = self.config.get("ignore", [])
         production, test, unmapped = [], [], []
         for root in roots:
@@ -368,7 +372,7 @@ class Project:
                 break
         if target.startswith("."):
             resolved = os.path.normpath(os.path.join(os.path.dirname(rel), target)).replace(os.sep, "/")
-            if matches_any(resolved, self.config.get("testFiles", [])):
+            if matches_any(resolved, self.dev_patterns()):
                 return ("test-file", resolved)
             module = self.module_for_path(resolved)
             return ("module", module) if module else ("missing", resolved)
@@ -548,8 +552,8 @@ def check(project):
                 elif kind_of == "test-file":
                     violations.append(Violation(
                         "test-import", f"test-import:{rel}->{value}", rel, line,
-                        f"{module.label()} imports the test file '{value}'.",
-                        "Production code never imports test code. Move what both need into the module itself."))
+                        f"{module.label()} imports the test or script file '{value}'.",
+                        "Production code never imports tests or development scripts. Move what both need into the module itself."))
                 elif kind_of == "external":
                     if not external_allowed(project, kind_config, value):
                         violations.append(Violation(

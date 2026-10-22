@@ -63,7 +63,7 @@
       // check. Production code gets a branded value only from a type guard that checks it,
       // such as isNoteTitle. Tests and test support may assert, for example on parsed
       // response JSON. `as const` is not a type assertion, so it stays allowed everywhere.
-      "files": ["src/**/*.ts"],
+      "files": ["src/**/*.ts", "scripts/**/*.ts", "checks/**/*.ts"],
       "excludeFiles": ["src/testsupport/**", "**/*.test.ts", "**/*.testing.ts"],
       "rules": { "typescript/consistent-type-assertions": ["error", { "assertionStyle": "never" }] }
     }
