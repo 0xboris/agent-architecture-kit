@@ -60,10 +60,10 @@ Allowed file names and the size limit are in `architecture.json`.
 
 ## Tests
 
-- A stub is an actor in TestSupport that conforms to the port, like `StubNoteStore`. Its initializer takes the results a test wants, and it records what it receives in a property, such as `saved`.
-- TestSupport also holds sample data, like `Samples.note`, and small fakes for ports whose state a test drives, like `FakeTimeSource` and `SequentialIDGenerator`.
-- The adapter's own tests run against the real system, such as a temporary directory.
-- `AppCompositionTests` builds `AppContainer` with stubs and checks which middleware the slices receive.
+- Use case, UI, middleware, and composition tests use the real adapter, such as a `FileNoteStore` in a temporary directory, and assert what the store returns afterwards. Their test targets depend on the adapter's target.
+- TestSupport holds sample data, like `Samples.note`, small fakes for ports whose state a test drives, like `FakeTimeSource` and `SequentialIDGenerator`, and implementations that fail, like `FailingNoteStore`.
+- The adapter's own tests run against the real system, such as a temporary directory. A stored format has a test that loads data in that format as an earlier version wrote it, like `fileWrittenByVersion1StillLoads`.
+- `AppCompositionTests` builds `AppContainer` on a temporary store and checks which middleware the slices receive.
 
 ## Concurrency
 

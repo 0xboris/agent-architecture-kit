@@ -17,17 +17,19 @@ The platform adapter implements `utilities.Logger` with `log/slog`.
 ## Tests
 
 - Tests use `testing`, and handler tests use `net/http/httptest` with `httptest.NewRecorder`.
-- A stub sets its results in fields and records its calls:
+- Run a use case on a store in `t.TempDir()`, then read back what it stored:
 
   ```go
-  store := &testsupport.StubNoteStore{Err: errors.New("offline")}
-  // ... run the use case ...
-  if saved := store.Saved(); len(saved) != 1 { t.Fatalf(...) }
+  store := filestore.New(filepath.Join(t.TempDir(), "notes.json"))
+  note, err := usecases.NewCreateNote(store, clock, ids).Run(ctx, "Groceries")
+  stored, err := store.AllNotes(ctx) // want []domain.Note{note}
   ```
+
+- `testsupport.FailingNoteStore{Err: err}` returns `err` from every call, for the error paths.
 
 ## Storage
 
-The `filestore` adapter keeps the notes in a JSON file. It stands in for a real database until the project needs one. It writes atomically: it writes a temporary file and then renames it. Its tests use `t.TempDir()`.
+The `filestore` adapter keeps the notes in a JSON file. It stands in for a real database until the project needs one. It writes atomically: it writes a temporary file and then renames it. Its tests use `t.TempDir()`, and `testdata/notes-v1.json` pins the stored format.
 
 ## Commands
 

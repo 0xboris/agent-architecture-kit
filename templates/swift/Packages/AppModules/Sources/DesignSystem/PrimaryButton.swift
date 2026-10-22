@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The app's main call-to-action button. Shared UI holds no business types.
+/// The app's main call-to-action button.
 public struct PrimaryButton: View {
     private let title: String
     private let action: () -> Void

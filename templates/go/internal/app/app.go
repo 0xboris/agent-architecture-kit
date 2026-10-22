@@ -1,6 +1,3 @@
-// Package app is the composition root. It applies middleware and wires each
-// slice in a wire_<slice>.go file. It holds straight-line wiring only: no
-// control flow and no feature code.
 package app
 
 import (
@@ -11,8 +8,6 @@ import (
 	"__GO_MODULE__/internal/utilities"
 )
 
-// Dependencies are the adapters that the service runs with. LiveDependencies
-// creates the real ones; the composition test passes stubs.
 type Dependencies struct {
 	NoteStore domain.NoteStore
 	Clock     domain.Clock
@@ -24,7 +19,6 @@ type App struct {
 	deps Dependencies
 	mux  *http.ServeMux
 
-	// Mandatory middleware: applied once here, so no slice receives the bare store.
 	noteStore domain.NoteStore
 }
 

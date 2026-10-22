@@ -16,17 +16,18 @@ The Platform adapter implements `AppLogger` with `os.Logger`. Test support guard
 ## Tests
 
 - Tests use Swift Testing: `import Testing`, `@Test`, and `#expect`. Unwrap with `#require` instead of `!` or `try!`.
-- A stub takes its results in its initializer and records its calls:
+- Run a use case on a `FileNoteStore` in a temporary directory, then read back what it stored:
 
   ```swift
-  let store = StubNoteStore(failure: Offline())
-  // ... run the use case ...
-  #expect(await store.saved.isEmpty)
+  let note = try await CreateNote(store: store, time: FakeTimeSource(), ids: SequentialIDGenerator())(title: "Groceries")
+  #expect(try await store.allNotes() == [note])
   ```
+
+- `FailingNoteStore(failure:)` throws from every call, for the error paths.
 
 ## Storage
 
-`FileNoteStore` in the Persistence target keeps the notes in a JSON file. It stands in for Core Data or SwiftData until the app needs one. It maps between `NoteRecord` and `Note`, and `NoteRecord` never leaves Persistence. `FileNoteStoreTests` runs it against a temporary directory.
+`FileNoteStore` in the Persistence target keeps the notes in a JSON file. It stands in for Core Data or SwiftData until the app needs one. It maps between `NoteRecord` and `Note`, and `NoteRecord` never leaves Persistence. `FileNoteStoreTests` runs it against a temporary directory, and `fileWrittenByVersion1StillLoads` pins the stored format.
 
 ## Commands
 

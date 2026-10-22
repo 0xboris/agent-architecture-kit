@@ -31,7 +31,8 @@ Node runs the TypeScript files directly by stripping types, and `tsc --noEmit` c
 
 ## Domain
 
-- **Model.** Interfaces with `readonly` fields, and branded types for values with rules, like `NoteTitle`. Only the parse function creates a branded value, and it is the one place where `as NoteTitle` is allowed. The linter rejects type assertions in production code outside the domain, so code elsewhere cannot create a branded value without its parse function. `as const` is not a type assertion and is allowed everywhere.
+- **Model.** Interfaces with `readonly` fields, and branded types for values with rules, like `NoteTitle`. A type guard that checks every rule, like `isNoteTitle`, is the only way to get a branded value, and the parse function, like `parseNoteTitle`, uses it to return an error case for each rule. The linter rejects type assertions in production code, so no code can create a branded value without its check. `as const` is not a type assertion and is allowed everywhere.
+- **Ids.** A plain `string` while a slice has one kind of id. Brand ids, like `NoteId`, once two kinds of id could be passed for each other.
 - **Results.** Expected failures are a `Result` from utilities, with a union of error cases, like `NoteTitleError`. Throw only for unexpected failures.
 - **Rules.** Plain functions, like `newestFirst`.
 - **Ports.** Interfaces that return promises when the real implementation does I/O. When a call has several expected outcomes, return a union of them, so that callers handle each one.
@@ -41,9 +42,9 @@ The domain imports no Node built-ins, and no packages except pure ones that the 
 
 ## Slices
 
-- **Use cases** are classes with private `#` fields, a constructor that takes an object of ports and settings, and a `run` method. Settings are plain values, such as a retention period, that `config.ts` reads and the wiring file passes in.
-- **The UI module** takes the slice's use cases and a logger. Input arrives as `unknown` and goes through a parse function before use. Response and request types stay in the UI module and map to and from domain types.
-- The UI module logs the errors it handles and maps result errors to output, such as status codes.
+- **Use cases** are functions whose first parameter is an object of ports and settings, like `createNote({ store, clock, ids }, rawTitle)`. Settings are plain values, such as a retention period, that `config.ts` reads and the wiring file passes in.
+- **The UI module** takes the slice's use cases as functions with their ports already bound, and a logger. It derives their types from the use cases, as in `createNote: (rawTitle: string) => ReturnType<typeof createNote>`, so a changed use case fails the UI's type check. Input arrives as `unknown` and goes through a parse function before use. Response and request types stay in the UI module and map to and from domain types.
+- The UI module logs the errors it handles and maps result errors to output, such as status codes, with a `Record` keyed by the error union, like `titleErrors`. The compiler then rejects a new error case that has no output.
 
 ## Other entry points
 
@@ -61,7 +62,7 @@ Schema files and migrations belong to the adapter that owns the storage. Never e
 ## Composition root
 
 - `container.ts` defines `Dependencies` and `createApp`. `createApp` applies the mandatory middleware and collects every slice.
-- `wire-<slice>.ts` builds the slice's use cases and UI, and decides which optional middleware the slice gets.
+- `wire-<slice>.ts` binds the slice's use cases to their ports, builds its UI, and decides which optional middleware the slice gets.
 - `live.ts` creates the real adapters, `config.ts` reads the environment, and `main.ts` starts the process.
 - When an adapter holds a resource that must be closed, such as a database pool, `live.ts` returns it next to the dependencies, for example as `{ dependencies, migrate, close }`, and `main.ts` closes it on shutdown.
 - Migrations run before the process serves. `main.ts` applies them at start, or a separate entry file such as `migrate.ts` does.
@@ -71,7 +72,7 @@ Schema files and migrations belong to the adapter that owns the storage. Never e
 
 The linter runs type-aware rules, which need type information from the compiler. Pick a linter that supports the project's TypeScript version: the templates use oxlint with oxlint-tsgolint, which is built on TypeScript 7, because typescript-eslint supports only TypeScript below 6.1. `docs/architecture/stack.md` names the linter and its settings file. Whatever the linter, these rules hold:
 
-- **No type assertions in production code outside the domain.** The domain asserts only in a parse function. Tests and test support may assert, for example on parsed response JSON.
+- **No type assertions in production code.** A branded value comes from a type guard that checks it. Tests and test support may assert, for example on parsed response JSON.
 - **No `any` flowing into typed values.** The result of `JSON.parse` or `response.json()` is `any`. Production code parses it with a parse function or a schema; tests may assert its type.
 - **Every promise is awaited or handled.** A stub that only returns a value is written as `() => Promise.resolve(value)` or `() => Promise.reject(error)`, not as an `async` function without `await`.
 - **Generated code is not linted.** Exclude a generated file, such as an API client, in the linter's settings, and regenerate it instead of editing it.
@@ -82,11 +83,11 @@ TypeScript 7.0's npm package holds the compiler but no JavaScript API: `import t
 ## Tests
 
 - A test file sits next to the code it tests and ends in `.test.ts`.
-- A stub is an object literal typed as the port, such as `const store: NoteStore = { ... }`. The compiler then fails the test when the port changes. Record calls with the test runner's mock functions, typed with the port's method, such as `NoteStore['save']`.
-- Test support holds sample data, like `sampleNote`, and small fakes for ports whose state a test drives, like `FakeClock`.
-- The adapter's own tests run against the real system, such as a real database or a temporary directory.
-- Name a helper that only tests use, such as a function that creates a database for the adapter's tests, `*.testing.ts`. The check treats it as test code, so production code cannot import it.
-- `src/app/container.test.ts` is the composition test. It builds the app with stubs and checks which middleware the slices receive.
+- Use case, UI, middleware, and composition tests use the real adapter through a helper in the adapter module, like `temporaryNoteStore()` in `fileNoteStore.testing.ts`, and assert what the store returns afterwards.
+- Test support holds sample data, like `sampleNote`, small fakes for ports whose state a test drives, like `FakeClock`, and implementations that fail, like `failingNoteStore`. Each is typed as the port, so the compiler fails the test when the port changes.
+- The adapter's own tests run against the real system, such as a real database or a temporary directory. A stored format has a file in the adapter's `testdata/`, like `notes-v1.json`, and a test that loads it.
+- Name a helper that only tests use, such as a function that creates a database for tests, `*.testing.ts`. The check treats it as test code, so production code cannot import it. It lives next to the adapter, because test support may not import adapters.
+- `src/app/container.test.ts` is the composition test. It builds the app on a temporary store and checks which middleware the slices receive.
 
 ## Several apps in one repository
 
@@ -118,14 +119,14 @@ apps/web/src/adapters/api/       the generated API client and the adapter that p
   ```
 
 - **Links stay within the slice.** A slice's UI may link to its own slice's pages. A link to another slice's page is a prop that the screen fills.
-- **One linter configuration at the root.** It covers every app. The assertion rule names each app's paths and excludes each domain, and the build output and the generated API client are ignored. An app with React adds the linter's React rules. With oxlint:
+- **One linter configuration at the root.** It covers every app. The assertion rule names each app's paths and excludes only test code, and the build output and the generated API client are ignored. An app with React adds the linter's React rules. With oxlint:
 
   ```jsonc
   "plugins": ["eslint", "typescript", "oxc", "react"],
   "ignorePatterns": [".check/**", "**/dist/**", "apps/web/src/adapters/api/schema.ts"],
   "overrides": [{
     "files": ["apps/*/src/**/*.{ts,tsx}", "packages/*/src/**/*.ts"],
-    "excludeFiles": ["packages/domain/**", "apps/*/src/domain/**", "apps/*/src/testsupport/**", "**/*.test.{ts,tsx}", "**/*.testing.{ts,tsx}"],
+    "excludeFiles": ["apps/*/src/testsupport/**", "**/*.test.{ts,tsx}", "**/*.testing.{ts,tsx}"],
     "rules": { "typescript/consistent-type-assertions": ["error", { "assertionStyle": "never" }] }
   }]
   ```
@@ -135,7 +136,7 @@ apps/web/src/adapters/api/       the generated API client and the adapter that p
 - **The client generator gets its own package when it needs an older TypeScript,** as openapi-typescript does. A package such as `packages/api-types` depends on the generator and on the TypeScript version it asks for, and writes the client into the app's `adapters/api/`. `./check` runs the generator from that package.
 - **The contract lives with the API.** A composition file, such as `openapi.ts`, prints the OpenAPI document from the routes, and the API commits it as `openapi.json`. Add it to the composition kind's `allowedFiles`. It builds the app with ports whose methods reject, because printing the document calls none of them, so it needs no database. The web app generates its client types from it into `adapters/api/`. `./check` regenerates both and fails when either differs from the committed file.
 - **The API adapter of a client** implements the client's port with the generated client and parses every response with the shared parse functions. Its tests answer requests with recorded responses in the contract's shape.
-- **Tests of UI components** render them with real use cases on a stubbed port, inside the providers they need. A helper that sets this up is a `*.testing.tsx` file in the slice's UI, so production code cannot import it.
+- **Tests of UI components** render them with real use cases, inside the providers they need. The web app's port is the API, which is remote, so these tests answer its calls with recorded responses. A helper that sets this up is a `*.testing.tsx` file in the slice's UI, so production code cannot import it.
 
 ### From one app to several
 

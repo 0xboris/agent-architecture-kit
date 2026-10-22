@@ -2,6 +2,7 @@ package filestore_test
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"slices"
 	"testing"
@@ -12,7 +13,6 @@ import (
 	"__GO_MODULE__/internal/testsupport"
 )
 
-// The adapter is tested against the real file system, in t.TempDir().
 func newStore(t *testing.T) *filestore.NoteStore {
 	return filestore.New(filepath.Join(t.TempDir(), "notes.json"))
 }
@@ -55,5 +55,20 @@ func TestSavingTheSameIDReplacesTheNote(t *testing.T) {
 	notes, err := store.AllNotes(context.Background())
 	if err != nil || !slices.Equal(notes, []domain.Note{replacement}) {
 		t.Fatalf("AllNotes() = %v, %v; want [%v]", notes, err, replacement)
+	}
+}
+
+func TestFileWrittenByVersion1StillLoads(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("testdata", "notes-v1.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "notes.json")
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	notes, err := filestore.New(path).AllNotes(context.Background())
+	if want := []domain.Note{testsupport.SampleNote(1, start)}; err != nil || !slices.Equal(notes, want) {
+		t.Fatalf("AllNotes() = %v, %v; want %v", notes, err, want)
 	}
 }

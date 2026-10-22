@@ -33,7 +33,7 @@ Each project receives:
 - **Claude Code integration in `.claude/`.** The Stop hook, a path-scoped rule that points agents to the docs, the `new-slice` and `new-port` checklists, and the `architecture-reviewer` subagent.
 - **Code owners.** `.github/CODEOWNERS` covers the gate files and the composition root.
 - **CI.** `.github/workflows/check.yml` runs `./check`, and the gate guard on pull requests into branches other than main.
-- **The Notes reference slice.** A small working feature with a domain rule, a port, middleware, a slice, an adapter, stubs, adapter tests against the real file system, and a composition test.
+- **The Notes reference slice.** A small working feature with a domain rule, a port, middleware, a slice, an adapter, tests that run against the real file store in a temporary directory, a file that pins the stored format, and a composition test.
 
 ## Requirements
 
@@ -268,7 +268,7 @@ Not tested:
 
 - **A template for several apps.** `init` still creates one app. "From one app to several" in `docs/architecture/typescript.md` gives the steps and an `architecture.json` for an API, a web app, and a shared domain.
 
-- **The Swift template after 2026-10-15.** Its new `StubNoteStore` and the rewritten tests have not been compiled. Run `./check` on macOS before relying on them.
+- **The Swift template after 2026-10-15.** Its tests, rewritten again on 2026-10-22 to run against the real file store, and `FailingNoteStore` have not been compiled. Run `./check` on macOS before relying on them.
 
 - **Claude Code in a real session.** Nobody has watched it load the Stop hook, the skills, the subagent, or the path-scoped rule. The formats follow the Claude Code documentation as of 2026-10-14.
 - **GitHub.** The GitHub Actions workflows were not run, and `CODEOWNERS` enforcement was not tried.

@@ -2,7 +2,6 @@ import type { Result } from '../utilities/result.ts';
 
 declare const noteTitleBrand: unique symbol;
 
-/** A title that follows the title rules. Only parseNoteTitle creates one. */
 export type NoteTitle = string & { readonly [noteTitleBrand]: true };
 
 export const maxTitleLength = 200;
@@ -15,10 +14,14 @@ export interface Note {
   readonly createdAt: Date;
 }
 
+export function isNoteTitle(value: string): value is NoteTitle {
+  // Array.from counts code points, so an emoji counts as one character, as in the Go template.
+  return value !== '' && value === value.trim() && Array.from(value).length <= maxTitleLength;
+}
+
 export function parseNoteTitle(raw: string): Result<NoteTitle, NoteTitleError> {
   const trimmed = raw.trim();
   if (trimmed === '') return { ok: false, error: 'empty' };
-  // Array.from counts code points, so an emoji counts as one character, as in the Go template.
-  if (Array.from(trimmed).length > maxTitleLength) return { ok: false, error: 'tooLong' };
-  return { ok: true, value: trimmed as NoteTitle };
+  if (!isNoteTitle(trimmed)) return { ok: false, error: 'tooLong' };
+  return { ok: true, value: trimmed };
 }

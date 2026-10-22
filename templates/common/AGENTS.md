@@ -16,7 +16,7 @@ The reference slice is **Notes**. Copy its structure when you add a slice, a use
 - Copy the structure of the reference slice, or of the closest existing code that follows it.
 - When the check reports a violation, apply the fix it names. Never change a gate file to make a check pass. `.github/CODEOWNERS` lists the gate files: `architecture.json`, the baseline, `check`, `tools/`, `.claude/`, `.github/`, the instruction files, the architecture docs, and the compiler, linter, and test runner settings. Changes to them need the owner.
 - Use the names in `GLOSSARY.md` for business concepts, and add new concepts to it.
-- Every behavior change gets a test that fails without the change. A bug fix starts with a test that reproduces the bug.
+- A bug fix starts with a failing reproduction, committed before the fix: a test when a cheap one exists, otherwise a script or a recorded run against the running app.
 - End with a short report: what changed, what you could not verify, and follow-ups you noticed but did not do.
 
 ## Skills and plugins

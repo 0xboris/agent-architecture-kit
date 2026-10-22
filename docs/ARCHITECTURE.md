@@ -81,7 +81,7 @@ When code needs something from outside the process, the domain declares a port a
 - Every dependency arrives through a constructor or a parameter. There are no singletons, global registries, or service locators, so an agent can see what a piece of code depends on by reading it.
 - Each third-party library that performs I/O sits behind one adapter.
 - Add an interface only at a module boundary or to isolate something slow or nondeterministic. Inside a module, use concrete types.
-- A port stays even when it has one adapter. The stubs in tests are its second implementation, and the port keeps the adapter's types out of the domain.
+- A port stays even when it has one adapter. The port keeps the adapter's types out of the domain.
 - A port's results form a closed set of cases, such as a union of outcomes or a result with a closed set of errors. Callers and their tests can then handle every case, and the compiler shows every caller that misses a new one.
 
 ## Middleware
@@ -148,15 +148,14 @@ A page that combines several features is a screen when it only shows what the sl
 `./check` runs everything: the architecture check, the build, the type checker, and the tests. It runs the same way locally, in the agent's Stop hook, and in CI. The main branch always passes it.
 
 - **Machines check first.** A failure at build time beats a failing test, and a failing test beats a review comment.
-- **Most tests are domain tests.** Rules are pure, so their tests need no stubs and run in milliseconds.
-- **Use case and UI tests stub the ports.** A stub is typed against the port and returns what the test sets. Give it each result the port can return, so that every path through the code runs, and check which port methods the code calls and with which arguments. A stub has no logic, so it needs no tests of its own.
-- **Adapters are tested against the real system**: a real database, a temporary directory, or recorded responses from a remote service. These tests show that the adapter produces the results that the port promises, so the stubs in other tests stay realistic.
-- **A small fake is fine** for a port whose state a test drives across calls, such as a clock that the test advances. Keep it simple enough that it needs no tests of its own.
+- **Most tests are domain tests.** Rules are pure, so their tests need no test doubles and run in milliseconds.
+- **Don't replace what you can run.** Use case, UI, middleware, and composition tests use the real adapter when it runs locally and fast, such as a file store in a temporary directory or an in-process database. They assert what a caller can read back. Replace an adapter only when the real one is remote, slow, or nondeterministic, or to make it fail: a fake clock, fixed ids, a store whose every call fails, or recorded responses from a remote service. Keep such a replacement simple enough that it needs no tests of its own.
+- **Adapters are tested against the real system**: a real database, a temporary directory, or recorded responses from a remote service. These tests show that the adapter keeps every promise of its port.
 - **Composition tests check the wiring**, such as which middleware a slice receives.
-- **Tests follow behavior.** They use a module's public interface and assert on results, on state, and on the calls a use case makes to its ports. They never assert on calls between a module's own parts, so a refactor that keeps behavior keeps every test green.
+- **Tests follow behavior.** A test asserts what the code's users can observe: results, errors, state they can read back, and effects outside the process. It fails when that behavior breaks, and it keeps passing when only the internals change. It never asserts which internal part or which port method did the work.
 - **Tests are deterministic.** They use a fake clock and fixed ids, never real time, the network, or unseeded randomness. They pass in any order. A flaky test is a bug.
-- **Migrations are tested on old data.** A migration that changes existing rows, such as one that adds a required column and fills it, gets a test that runs it on rows written by the previous version.
-- **Verification stays honest.** Every bug fix starts with a test that reproduces the bug. No check is made to pass by deleting, skipping, or loosening a test, or by changing a gate file.
+- **Stored formats are pinned.** Each stored format has a committed file that an earlier version wrote, and a test that loads it, so a renamed field fails a test instead of old data. A migration that changes existing rows, such as one that adds a required column and fills it, gets a test that runs it on rows written by the previous version.
+- **Verification stays honest.** Every bug fix starts with a failing reproduction, committed before the fix: a test when a cheap one exists, otherwise a script or a recorded run against the running app. Prefer no new test to a test that mostly checks test doubles. No check is made to pass by deleting, skipping, or loosening a test, or by changing a gate file.
 
 ## Where new code goes
 

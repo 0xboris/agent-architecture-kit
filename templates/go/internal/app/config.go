@@ -2,8 +2,6 @@ package app
 
 import "os"
 
-// Config is read from the environment. This is the one composition file
-// where control flow is allowed.
 type Config struct {
 	Addr    string
 	DataDir string

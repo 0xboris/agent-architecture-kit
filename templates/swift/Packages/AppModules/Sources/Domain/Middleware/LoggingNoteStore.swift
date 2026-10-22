@@ -1,7 +1,5 @@
 import Utilities
 
-/// Middleware: wraps any `NoteStore` and logs each save. The composition root
-/// applies it once to the real store, so every slice gets it.
 public struct LoggingNoteStore: NoteStore {
     private let base: any NoteStore
     private let logger: any AppLogger

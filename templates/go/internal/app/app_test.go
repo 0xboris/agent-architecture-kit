@@ -1,22 +1,22 @@
 package app_test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"__GO_MODULE__/internal/adapters/filestore"
 	"__GO_MODULE__/internal/app"
 	"__GO_MODULE__/internal/testsupport"
 )
 
-// Composition tests check the wiring in package app: which middleware each
-// slice receives. Unit tests of a slice build their use cases directly and
-// never see the wiring.
 func TestNotesSliceStoresThroughTheLoggingMiddleware(t *testing.T) {
-	store := &testsupport.StubNoteStore{}
+	store := filestore.New(filepath.Join(t.TempDir(), "notes.json"))
 	logger := &testsupport.RecordingLogger{}
 	service := app.New(app.Dependencies{
 		NoteStore: store,
@@ -32,8 +32,8 @@ func TestNotesSliceStoresThroughTheLoggingMiddleware(t *testing.T) {
 	if response.Code != http.StatusCreated {
 		t.Fatalf("got %d %s", response.Code, response.Body)
 	}
-	if saved := store.Saved(); len(saved) != 1 {
-		t.Fatalf("saved %v; want one note", saved)
+	if stored, err := store.AllNotes(context.Background()); err != nil || len(stored) != 1 {
+		t.Fatalf("stored %v, %v; want one note", stored, err)
 	}
 	if got := logger.Messages(); !slices.Equal(got, []string{"note saved"}) {
 		t.Fatalf("logged %v; want the middleware's entry", got)

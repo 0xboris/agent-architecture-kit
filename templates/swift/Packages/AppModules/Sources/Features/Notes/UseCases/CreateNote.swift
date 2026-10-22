@@ -1,8 +1,6 @@
 import Domain
 import Foundation
 
-/// Creates a note from what the user typed. Orchestration only: the title
-/// rules live in `NoteTitle`, and storage sits behind `NoteStore`.
 public struct CreateNote: Sendable {
     private let store: any NoteStore
     private let time: any TimeSource

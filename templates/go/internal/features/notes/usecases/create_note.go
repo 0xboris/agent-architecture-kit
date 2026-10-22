@@ -1,5 +1,3 @@
-// Package usecases holds the use cases of the notes slice. They orchestrate
-// only: the rules live in the domain, and storage sits behind ports.
 package usecases
 
 import (

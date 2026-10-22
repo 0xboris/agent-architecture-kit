@@ -14,7 +14,6 @@ export class RandomIds implements IdGenerator {
   }
 }
 
-/** Writes one JSON line per log entry to standard error. */
 export class ConsoleLogger implements Logger {
   info(message: string, metadata: Record<string, string> = {}): void {
     console.error(JSON.stringify({ level: 'info', message, ...metadata }));

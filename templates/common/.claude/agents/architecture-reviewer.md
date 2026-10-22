@@ -17,8 +17,8 @@ Answer each question for the change. Quote the file and line for every problem.
 6. Does a new capability have its own slice, or was it added to an existing slice that does something else?
 7. Does the composition root hold anything besides wiring?
 8. Does a change to a stored format or a wire contract only add things? Renamed or removed fields need a migration path, and unknown enumeration values need an unknown case.
-9. Does each new behavior have a test that would fail without it? Tests check results, state, and the calls a use case makes to its ports, never calls between a module's own parts.
-10. Does each use case test give its stubs every result the port can return, so that every path runs? Are the stubs typed against the port?
+9. Does each new behavior have a test that would fail without it? Tests check results, errors, and state that a caller can read back, never which internal part or port method did the work.
+10. Do use case tests run against the real adapter where it runs locally, and replace it only when it is remote, slow, or nondeterministic, or to make it fail?
 11. Is each new or changed adapter tested against the real system, for each case its port promises?
 12. Are business concepts named as in `GLOSSARY.md`?
 13. Does the change remove a use case, port, or middleware because it only passes calls through? These layers stay even when they are thin.

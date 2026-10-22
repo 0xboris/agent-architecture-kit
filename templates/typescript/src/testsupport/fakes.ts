@@ -1,5 +1,5 @@
 import { parseNoteTitle, type Note } from '../domain/note.ts';
-import type { Clock, IdGenerator } from '../domain/ports.ts';
+import type { Clock, IdGenerator, NoteStore } from '../domain/ports.ts';
 import type { Logger } from '../utilities/logger.ts';
 
 /** A clock that starts at a fixed time and moves only when a test calls advance. */
@@ -45,4 +45,8 @@ export function sampleNote(number: number, createdAt: Date = new Date('2025-01-0
   const title = parseNoteTitle(`Note ${number}`);
   if (!title.ok) throw new Error('The sample title is invalid.');
   return { id: `id-${String(number).padStart(3, '0')}`, title: title.value, createdAt };
+}
+
+export function failingNoteStore(error: Error): NoteStore {
+  return { allNotes: () => Promise.reject(error), save: () => Promise.reject(error) };
 }

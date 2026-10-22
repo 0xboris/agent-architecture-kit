@@ -1,5 +1,3 @@
-// Package httpjson holds the JSON helpers that the handlers of every slice
-// share. Shared UI holds no business types.
 package httpjson
 
 import (

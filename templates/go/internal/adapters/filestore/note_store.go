@@ -1,5 +1,3 @@
-// Package filestore stores notes as JSON in one file. Replace it with a
-// database adapter as the service grows; the domain and the slices do not change.
 package filestore
 
 import (
@@ -16,8 +14,6 @@ import (
 	"__GO_MODULE__/internal/domain"
 )
 
-// noteRecord is the stored form. Its JSON names are the stored format, so
-// rename them only with a migration.
 type noteRecord struct {
 	ID        string    `json:"id"`
 	Title     string    `json:"title"`
@@ -83,7 +79,7 @@ func (s *NoteStore) read() ([]noteRecord, error) {
 	return records, nil
 }
 
-// write replaces the file atomically: it writes a temporary file and renames it.
+// write renames a temporary file into place, so a crash never leaves half a file.
 func (s *NoteStore) write(records []noteRecord) error {
 	data, err := json.Marshal(records)
 	if err != nil {

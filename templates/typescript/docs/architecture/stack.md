@@ -7,34 +7,35 @@ The kit's template uses Node's built-in modules only, plus TypeScript 7 and oxli
 ## HTTP
 
 - `src/sharedui/http.ts` is a small router on `node:http`. A route is an object with `method`, `path`, and `handle`.
-- A slice's UI module is a function that takes the use cases and a logger and returns the slice's routes, like `notesRoutes`. `createApp` collects the routes of every slice into one router.
+- A slice's UI module is a function that takes the bound use cases and a logger and returns the slice's routes, like `notesRoutes`. `createApp` collects the routes of every slice into one router.
 - `readJson`, `sendJson`, and `sendError` read and write JSON bodies.
 
 ## Tests
 
 - Tests use `node:test` and `node:assert/strict`.
-- Record the calls to a port with `mock.fn` from `node:test`:
+- Run a use case on a temporary store, then read back what it stored:
 
   ```ts
-  const save = mock.fn<NoteStore['save']>(() => Promise.resolve());
-  const store: NoteStore = { allNotes: () => Promise.resolve([]), save };
-  // ... run the use case ...
-  assert.deepEqual(save.mock.calls.map((call) => call.arguments), [[note]]);
+  const store = await temporaryNoteStore();
+  const result = await createNote({ store, clock: new FakeClock(), ids: new SequentialIds() }, 'Groceries');
+  assert.ok(result.ok);
+  assert.deepEqual(await store.allNotes(), [result.value]);
   ```
 
+- `failingNoteStore(error)` from test support rejects every call, for the error paths.
 - `startTestServer` from test support runs routes on a free port for one test.
-- A stub that only returns a value is written as `() => Promise.resolve(value)` or `() => Promise.reject(error)`. The linter's `require-await` rejects an `async` function without `await`.
+- A test double that only returns a value is written as `() => Promise.resolve(value)` or `() => Promise.reject(error)`. The linter's `require-await` rejects an `async` function without `await`.
 
 ## Storage
 
-`FileNoteStore` keeps the notes in a JSON file. It stands in for a real database until the project needs one. It serializes access with a promise queue and writes atomically with a temporary file and a rename. Its tests run against the real file system in a temporary directory.
+`FileNoteStore` keeps the notes in a JSON file. It stands in for a real database until the project needs one. It serializes access with a promise queue and writes atomically with a temporary file and a rename. Its tests run against the real file system in a temporary directory, and `testdata/notes-v1.json` pins the stored format.
 
 ## Lint
 
 oxlint with type-aware rules, in `.oxlintrc.json`. oxlint-tsgolint gives the type-aware rules their type information. It is built on TypeScript 7, so it reads `tsconfig.json` with the same compiler as `tsc`. typescript-eslint supports only TypeScript below 6.1, so it does not work here.
 
 - The rules are the correctness category plus the rules of ESLint's and typescript-eslint's recommended sets, including the type-aware ones of `recommendedTypeChecked`.
-- `consistent-type-assertions` with `assertionStyle: "never"` rejects type assertions, such as `'x' as NoteTitle`, in production code outside `src/domain`. The domain may assert, and only in the parse function that checks the value. Tests, `*.testing.ts` files, and test support may assert too. `as const` is allowed everywhere. The rule's message suggests a type annotation instead; for a branded type, use its parse function.
+- `consistent-type-assertions` with `assertionStyle: "never"` rejects type assertions, such as `'x' as NoteTitle`, in all production code. A branded value comes from its type guard, such as `isNoteTitle`. Tests, `*.testing.ts` files, and test support may assert. `as const` is allowed everywhere. The rule's message suggests a type annotation instead; for a branded type, use its type guard or parse function.
 - `no-unsafe-assignment`, `no-unsafe-return`, and the other `no-unsafe` rules reject an `any` value, such as the result of `JSON.parse`, flowing into a typed value. Parse outside data with a parse function instead.
 - `no-floating-promises` allows `test` from `node:test`, whose promise the runner awaits.
 - Warnings fail the step, and so do unused disable comments.

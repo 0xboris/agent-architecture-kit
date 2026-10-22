@@ -64,9 +64,9 @@ For SQL databases, keep numbered migrations in the adapter, and never edit a mig
 ## Tests
 
 - Tests use the standard `testing` package. Domain and middleware tests that need test support live in external test packages, such as `domain_test`, to avoid an import cycle.
-- A stub is a struct in test support with exported fields for the results a test sets, like `StubNoteStore`. It records what it receives, guards that record with a mutex, and asserts at compile time that it implements the port: `var _ domain.NoteStore = (*StubNoteStore)(nil)`.
-- Test support also holds sample data, like `SampleNote`, and small fakes for ports whose state a test drives, like `FakeClock`.
-- The adapter's own tests run against the real system, such as a real database or `t.TempDir()`.
-- `internal/app/app_test.go` is the composition test. It builds the app with stubs and checks which middleware the slices receive.
+- Use case, UI, middleware, and composition tests use the real adapter, such as `filestore.New(filepath.Join(t.TempDir(), "notes.json"))`, and assert what the store returns afterwards.
+- Test support holds sample data, like `SampleNote`, small fakes for ports whose state a test drives, like `FakeClock`, and implementations that fail, like `FailingNoteStore`. Each asserts at compile time that it implements the port: `var _ domain.NoteStore = FailingNoteStore{}`.
+- The adapter's own tests run against the real system, such as a real database or `t.TempDir()`. A stored format has a file in the adapter's `testdata/`, like `notes-v1.json`, and a test that loads it.
+- `internal/app/app_test.go` is the composition test. It builds the app on a temporary store and checks which middleware the slices receive.
 
 Tests must pass in any order and without data races.

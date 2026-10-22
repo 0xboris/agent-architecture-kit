@@ -1,8 +1,6 @@
 import Domain
 import Foundation
 
-/// Stores notes as JSON in one file. Replace it with Core Data, SwiftData, or
-/// SQLite as the app grows; the domain and the slices do not change.
 public actor FileNoteStore: NoteStore {
     private let fileURL: URL
 

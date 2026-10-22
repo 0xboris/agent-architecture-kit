@@ -59,12 +59,12 @@
   },
   "overrides": [
     {
-      // A type assertion can create a branded value, such as a NoteTitle, without the
-      // check in its parse function. Only the domain may assert, in that parse function.
-      // Tests and test support may assert too, for example on parsed response JSON.
-      // `as const` is not a type assertion, so it stays allowed everywhere.
+      // A type assertion can create a branded value, such as a NoteTitle, without its
+      // check. Production code gets a branded value only from a type guard that checks it,
+      // such as isNoteTitle. Tests and test support may assert, for example on parsed
+      // response JSON. `as const` is not a type assertion, so it stays allowed everywhere.
       "files": ["src/**/*.ts"],
-      "excludeFiles": ["src/domain/**", "src/testsupport/**", "**/*.test.ts", "**/*.testing.ts"],
+      "excludeFiles": ["src/testsupport/**", "**/*.test.ts", "**/*.testing.ts"],
       "rules": { "typescript/consistent-type-assertions": ["error", { "assertionStyle": "never" }] }
     }
   ]
