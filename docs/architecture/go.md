@@ -59,7 +59,7 @@ For SQL databases, keep numbered migrations in the adapter, and never edit a mig
 - `wire_<slice>.go` builds the slice's use cases and UI, and decides which optional middleware the slice gets.
 - `live.go` creates the real adapters, and `config.go` reads the environment.
 - `cmd/server/main.go` reads the config, builds the app, and starts it.
-- Control flow is allowed in `config.go`. Elsewhere only `if err != nil {` and `if err := ...; err != nil {` are allowed, for error handling.
+- Control flow is allowed in `config.go`. Elsewhere the check allows only `if err != nil {` and `if err := ...; err != nil {`, for error handling.
 
 ## Tests
 

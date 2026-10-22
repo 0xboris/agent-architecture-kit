@@ -10,7 +10,7 @@ Every layer here exists for a stated reason: a decision kept in one place, outsi
 
 ## The shape
 
-The code is layered horizontally and sliced vertically. The layers say which code may depend on which. The slices keep the code of one capability together.
+The code has horizontal layers and vertical slices. The layers say which code may depend on which. The slices keep the code of one capability together.
 
 ```
                 composition root
@@ -70,7 +70,7 @@ A use case makes no business decision. If you write an `if` about business meani
 
 A use case is the one way from a slice's UI to the ports, and the architecture check fails when UI names a port. Keep the use case even when it only calls one port, so that no slice gets a second way that skips it, and the next business step of the operation has an obvious place. Keep it small, as a function or a type with one method, in the shape that the language guide shows.
 
-Orchestration may repeat across slices. A manual entry, an import, and a scheduled job may each load, validate, and save a transaction in their own use case. That is acceptable, because the knowledge sits in the rules and the rules are shared.
+Orchestration may repeat across slices. A manual entry, an import, and a scheduled job may each load, validate, and save a transaction in their own use case. That is acceptable, because the knowledge is in the rules, and every slice shares the rules.
 
 Watch for steps that must happen on every path. If changing a step would force every path to change the same way, it is not orchestration. It belongs in a domain rule, a port method, or middleware, where the next path cannot forget it.
 
@@ -106,7 +106,7 @@ Before adding middleware, ask whether the data needs updating at all. A total th
 
 ## The composition root
 
-The composition root holds wiring and nothing else, so a reader finds every choice of implementation in one place. Decisions belong in the domain or in a use case. Configuration and the environment are read here and passed in as values.
+The composition root holds wiring and nothing else, so a reader finds every choice of implementation in one place. Decisions belong in the domain or in a use case. The composition root reads configuration and the environment, and passes them in as values.
 
 The architecture check holds it to its file names, to wiring without control flow outside the configuration file, and to a line limit. Each failure names the fix.
 
@@ -117,7 +117,7 @@ The composition root decides which middleware each slice receives, such as authe
 - **Parse at the edge.** Data from outside the process becomes domain types where it enters. This includes requests, responses, database rows, files, stored settings, and deep links. Inside, code trusts its types.
 - **One model per boundary.** Wire types, storage types, and domain types stay separate even when they look alike. Adapters and UI map between them.
 - **Data outlives code.** Data that older versions stored, and clients that are still installed, will meet the new code. That includes what a client keeps on the device, such as a key in the browser's storage. Change stored formats and wire contracts by adding: add optional fields, keep old fields until nothing uses them, and map unknown enumeration values to an unknown case. Renaming or removing a stored or sent field is a deliberate decision with a migration path.
-- **Errors are explicit.** No error is swallowed. An error that leaves a module tells the caller what it can do and carries its cause. Log each error once, where it is handled, with internal ids and no personal data.
+- **Errors are explicit.** Code never swallows an error. An error that leaves a module tells the caller what it can do and carries its cause. Log each error once, where it is handled, with internal ids and no personal data.
 - **Authorization is checked where requests enter.** Every entry point that acts for a caller checks that the caller may act on each record that the request touches.
 
 ## Several apps in one repository
@@ -130,7 +130,7 @@ A repository can hold several apps, such as an API and the web app that calls it
 From these follow:
 
 - **Each app keeps its own ports.** The API's storage port and the web app's API port mean nothing to the other app, so they stay in each app's own domain.
-- **The contract is generated and committed.** The API generates its contract from its routes, and each client generates its typed API client from the contract. `./check` fails when either is out of date, so a change to the contract shows up in review, like a change to a stored format. The rules for data that outlives code apply to it: installed clients keep calling the old shape.
+- **The contract is generated and committed.** The API generates its contract from its routes, and each client generates its typed API client from the contract. `./check` fails when either is out of date, so a change to the contract shows up in review, like a change to a stored format. The rules for data that outlives code apply to it, because installed clients keep calling the old shape.
 - **The client's API adapter parses with the shared rules.** It maps the wire types that the contract describes to domain types, through the shared parse functions, as any adapter parses outside data.
 - **The API is the authority.** A client runs the shared rules early, to answer the user before a request is sent. The API checks every request again, because the apps are deployed separately and a client may briefly run an older rule.
 - **Clients in other repositories get only the contract.** A mobile app in its own repository generates its client from the same contract and has no shared code. Its checks follow the constraints that the contract states, and the API's answer decides.
@@ -153,12 +153,12 @@ A passing check does not show that a change works. Before a change is done, driv
 - **Machines check first.** A failure at build time beats a failing test, and a failing test beats a review comment.
 - **Most tests are domain tests.** Rules are pure, so their tests need no test doubles and run in milliseconds.
 - **Don't replace what you can run.** Use case, UI, middleware, and composition tests use the real adapter when it runs locally and fast, such as a file store in a temporary directory or an in-process database. They assert what a caller can read back. Replace an adapter only when the real one is remote, slow, or nondeterministic, or to make it fail: a fake clock, fixed ids, a store whose every call fails, or recorded responses from a remote service. Keep such a replacement simple enough that it needs no tests of its own.
-- **Adapters are tested against the real system**: a real database, a temporary directory, or recorded responses from a remote service. These tests show that the adapter keeps every promise of its port.
+- **Adapter tests run against the real system**, such as a real database, a temporary directory, or recorded responses from a remote service. These tests show that the adapter keeps every promise of its port.
 - **Composition tests check the wiring**, such as which middleware a slice receives.
 - **Tests follow behavior.** A test asserts what the code's users can observe: results, errors, state they can read back, and effects outside the process. It fails when that behavior breaks, and it keeps passing when only the internals change. It never asserts which internal part or which port method did the work.
 - **Tests are deterministic.** They use a fake clock and fixed ids, never real time, the network, or unseeded randomness. They pass in any order. A flaky test is a bug.
 - **Stored formats are pinned.** Each stored format has a committed sample that an earlier version wrote, and a test that loads it, so a renamed field fails a test instead of old data. A migration that changes existing rows, such as one that adds a required column and fills it, gets a test that runs it on rows written by the previous version.
-- **Verification stays honest.** Every bug fix starts with a failing reproduction, committed before the fix. Use a test when a cheap one exists, and otherwise a script or a recorded run against the running app. Prefer no new test to a test that mostly checks test doubles. No check is made to pass by deleting, skipping, or loosening a test, or by changing a gate file.
+- **Verification stays honest.** Every bug fix starts with a failing reproduction, committed before the fix. Use a test when a cheap one exists, and otherwise a script or a recorded run against the running app. Prefer no new test to a test that mostly checks test doubles. Never make a check pass by deleting, skipping, or loosening a test, or by changing a gate file.
 
 ## How this is enforced
 
@@ -171,7 +171,7 @@ A passing check does not show that a change works. Before a change is done, driv
   - imports between apps, and imports into a module that bypass its public entry
   - ports used in UI, which reaches them only through use cases
   - cycles
-- **The baseline** (`architecture-baseline.json`) records violations that existed before the rules were adopted. The check fails when a change adds a violation, and when the baseline accepts more violations than exist, because a fixed violation could otherwise come back unnoticed. When code is fixed, lower the baseline in the same change with `python3 tools/archcheck.py --write-baseline`.
+- **The baseline** (`architecture-baseline.json`) records violations that existed before the project adopted the rules. The check fails when a change adds a violation, and when the baseline accepts more violations than exist, because a fixed violation could otherwise come back unnoticed. When you fix a violation, lower the baseline in the same change with `python3 tools/archcheck.py --write-baseline`.
 - **Project checks** in `checks/` are executables that `./check` runs, one step each. Add one when a mistake keeps coming back and neither `architecture.json` nor the linter can catch it. Its message names the fix. A check runs from the repository root, and finds its helpers next to itself.
 - **Gate files** define the checks: `architecture.json`, `check`, `tools/`, `.claude/`, `.github/`, the instruction files, the architecture docs, the compiler, linter, and test runner settings, and the composition root. A change to them can loosen a check, so a code-owner rule requires the owner's review. Never change a gate file to make a check pass.
 - **The gate guard** (`tools/gateguard.py`) runs in CI on every pull request. It fails when the baseline gains a violation, when an existing file in `checks/` changes or goes away, when the glossary loses a term, or when production code gains a lint or type-check suppression. Lowering the baseline, adding a check, and adding a term only tighten the rules, so none of them needs the owner. A pull request that loosens a check passes only when it adds a row to the exceptions table of `AGENTS.md` with a reason and an expiry date, and CI marks each loosening on the pull request. `AGENTS.md` is a gate file, so the owner reviews the row. Once a row's date passes, the gate guard fails every pull request until someone fixes what the row allowed and removes it.

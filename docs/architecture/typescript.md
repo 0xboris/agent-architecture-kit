@@ -38,7 +38,7 @@ Node runs the TypeScript files directly by stripping types, and `tsc --noEmit` c
 - **Ports.** Interfaces that return promises when the real implementation does I/O. When a call has several expected outcomes, return a union of them, so that callers handle each one.
 - **Middleware.** A class that implements a port and wraps another instance of it, like `LoggingNoteStore`.
 
-The domain imports no Node built-ins, and no packages except pure ones that the project allows in `architecture.json`, such as Zod. Such a package stays out of the domain's exports: other modules import the domain's types and parse functions, which return the domain's own `Result` and error unions. The domain must not call `Date.now()`, `new Date()` without arguments, `Math.random()`, `crypto.randomUUID()`, `fetch`, timers, or `process.env`, and must not log through `console`. Take the time and ids from ports.
+The domain imports no Node built-ins, and no packages except pure ones that the project allows in `architecture.json`, such as Zod. Such a package stays out of the domain's exports. Other modules import the domain's types and parse functions, which return the domain's own `Result` and error unions. The domain must not call `Date.now()`, `new Date()` without arguments, `Math.random()`, `crypto.randomUUID()`, `fetch`, timers, or `process.env`, and must not log through `console`. Take the time and ids from ports.
 
 ## Slices
 
@@ -78,7 +78,7 @@ The linter runs type-aware rules, which need type information from the compiler.
 - **Generated code is not linted.** Exclude a generated file, such as an API client, in the linter's settings, and regenerate it instead of editing it.
 - **Fix a lint finding instead of silencing it.** A disable comment in production code needs a row in the exceptions table of `AGENTS.md`, which the owner approves, and the gate guard fails a pull request that adds one without it. The comment names its reason on its line.
 
-TypeScript 7.0's npm package holds the compiler but no JavaScript API: `import ts from 'typescript'` gives only its version. A tool that calls that API, such as a code generator that prints TypeScript, fails with TypeScript 7. Give such a tool a workspace package of its own that depends on the tool and on the TypeScript version that the tool's peer dependency asks for, such as 5.9 for openapi-typescript 7, and run it from there. A package manager resolves a tool's `typescript` peer dependency from the package that depends on the tool, so the rest of the repository keeps TypeScript 7. Tools that only strip types, such as Node, Vite, and Vitest, work with any version.
+TypeScript 7.0's npm package holds the compiler but no JavaScript API, so `import ts from 'typescript'` gives only its version. A tool that calls that API, such as a code generator that prints TypeScript, fails with TypeScript 7. Give such a tool a workspace package of its own that depends on the tool and on the TypeScript version that the tool's peer dependency asks for, such as 5.9 for openapi-typescript 7, and run it from there. A package manager resolves a tool's `typescript` peer dependency from the package that depends on the tool, so the rest of the repository keeps TypeScript 7. Tools that only strip types, such as Node, Vite, and Vitest, work with any version.
 
 ## Tests
 

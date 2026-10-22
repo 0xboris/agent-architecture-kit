@@ -231,7 +231,7 @@
         <text class="lb" x="932" y="470">outside this repository's code</text>
       </svg>
     </div>
-    <figcaption>Each app is layered as the kit describes, with its own composition root, slices, domain and adapters. The apps meet in two places only: the shared rules in <code>packages/domain</code>, imported at build time, and the API's HTTP routes, called at run time. <code>openapi.json</code> is generated from the API's routes, and the web app and the mobile app each generate their client from it.</figcaption>
+    <figcaption>Each app has the kit's layers, with its own composition root, slices, domain and adapters. The apps meet in two places only: the shared rules in <code>packages/domain</code>, imported at build time, and the API's HTTP routes, called at run time. The API generates <code>openapi.json</code> from its routes, and the web app and the mobile app each generate their client from it.</figcaption>
   </figure>
 
   <div class="cols">
@@ -250,7 +250,7 @@
     <section>
       <h2>How a note title is checked</h2>
       <ul>
-        <li>The web form calls <code>parseNoteTitle</code> from <code>packages/domain</code> and shows "Enter a title." before anything is sent.</li>
+        <li>The web form calls <code>parseNoteTitle</code> from <code>packages/domain</code> and shows "Enter a title." before it sends anything.</li>
         <li>The web app's <code>adapters/api</code> sends <code>POST /notes</code> through the client generated from <code>openapi.json</code>.</li>
         <li>The API's route validates the body with its Zod schema, and its use case calls the same <code>parseNoteTitle</code>. The API's answer decides.</li>
         <li>The mobile app has no shared code. It gets the same limits from the spec's <code>maxLength</code> and relies on the API's 422.</li>
