@@ -49,12 +49,7 @@ export function notesRoutes(deps: {
       method: 'POST',
       path: '/notes',
       handle: async (request, response) => {
-        let body: { title: string } | undefined;
-        try {
-          body = parseCreateRequest(await readJson(request));
-        } catch {
-          body = undefined;
-        }
+        const body = await readJson(request).then(parseCreateRequest, () => undefined);
         if (body === undefined) {
           sendError(response, { status: 400, code: 'invalid_request', message: 'Send a JSON object with a title.' });
           return;
