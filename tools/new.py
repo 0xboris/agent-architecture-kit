@@ -82,8 +82,8 @@ def copy_kit_files(kit, dest, language, values, overwrite, report):
         os.chmod(target, 0o755)
     os.makedirs(os.path.join(dest, "docs", "architecture"), exist_ok=True)
     shutil.copy2(os.path.join(kit, "docs", "ARCHITECTURE.md"), os.path.join(dest, "docs", "ARCHITECTURE.md"))
-    shutil.copy2(os.path.join(kit, "docs", "architecture", f"{language}.md"),
-                 os.path.join(dest, "docs", "architecture", f"{language}.md"))
+    for page in (f"{language}.md", "where-code-goes.md", "review.md"):
+        shutil.copy2(os.path.join(kit, "docs", "architecture", page), os.path.join(dest, "docs", "architecture", page))
 
 
 def placeholder_values(language, args):

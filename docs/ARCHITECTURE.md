@@ -1,10 +1,12 @@
 # Architecture
 
-This document describes how the code is organized and why. It gives every agent and every person who works here the same picture: which kinds of modules exist, what each holds, which may depend on which, and how a change is verified.
+This document describes how the code is organized and why. It gives every agent and every person who works here the same picture of which kinds of modules exist, what each holds, which may depend on which, and how a change is verified.
 
-The language guide in `docs/architecture/` shows how each part looks in this project's language, and `docs/architecture/stack.md` names the libraries this project uses and how the reference slice uses them. `docs/architecture/modules.md` lists every module with its kind; the check generates it. `AGENTS.md` names the reference slice. When you write a kind of code for the first time, copy its structure.
+The language guide in `docs/architecture/` shows how each part looks in this project's language, and `docs/architecture/stack.md` names the libraries this project uses and how the reference slice uses them. `docs/architecture/modules.md` lists every module with its kind, and the check generates it. `docs/architecture/where-code-goes.md` says which module new code belongs in, and `docs/architecture/review.md` lists the questions every review answers. `AGENTS.md` names the reference slice. When you write a kind of code for the first time, copy its structure.
 
 `./check` enforces most of this document. A forbidden import, a file outside every module, or feature code in the composition root fails the check with a message that names the fix. The rest of this document covers the judgment calls that no tool can make.
+
+Every layer here exists for a stated reason: a decision kept in one place, outside types and I/O kept out of the domain, or one way to do one task. A layer with such a reason stays even when it is thin. A layer without one only adds reader load, so leave it out.
 
 ## The shape
 
@@ -24,18 +26,18 @@ The code is layered horizontally and sliced vertically. The layers say which cod
            utilities
 ```
 
-An arrow points from a module to what it may depend on. Dependencies point inward, from details toward policy: the domain is policy, while UI, storage, and frameworks are details. Policy never depends on details.
+An arrow points from a module to what it may depend on. Dependencies point inward, from details toward policy. The domain is policy, and UI, storage, and frameworks are details. Policy never depends on details.
 
 ## Module kinds
 
 - **Domain.** The business model, the rules, the ports, and the middleware. It performs no I/O and uses no UI framework, database, or SDK. It depends only on utilities and on pure libraries that the project allows, such as a validation library, and keeps those libraries out of what it exports.
-- **Use cases.** One module per slice. A use case carries out one operation for its slice: it loads what it needs through ports, lets domain rules decide, and saves or sends the result through ports. It depends on the domain and utilities.
-- **UI.** One module per slice: screens and view models in an app, request handlers in a service, commands in a tool. It turns input into use case calls and results into output. It depends on its own slice's use cases, the domain, shared UI, and utilities.
+- **Use cases.** One module per slice. A use case carries out one operation for its slice. It loads what it needs through ports, lets domain rules decide, and saves or sends the result through ports. It depends on the domain and utilities.
+- **UI.** One module per slice, such as screens and view models in an app, request handlers in a service, or commands in a tool. It turns input into use case calls and results into output. It depends on its own slice's use cases, the domain, shared UI, and utilities.
 - **Shared UI.** Presentation pieces that several slices use, such as components, styles, or HTTP response helpers. It holds no business types and depends only on utilities.
 - **Adapters.** Implementations of the ports: databases, files, the network, platform services, third-party SDKs, the clock, and random sources. Each adapter maps outside formats to domain types. It depends on the domain and utilities.
 - **Composition root.** The entry point. It creates the adapters, applies middleware, wires every slice, reads configuration, and starts the process. It is the only code that knows which implementation stands behind each port. Nothing depends on it.
 - **Utilities.** Helpers with no business meaning, such as the logging interface or a result type. They depend on nothing in the project.
-- **Test support.** Sample data, stubs, and small fakes for tests. Only test code depends on it.
+- **Test support.** Sample data, small fakes, and port implementations that fail, for tests. Only test code depends on it.
 - **Screens.** In an app with pages, a screen arranges the public UI of one or more slices on one page, such as a home page made of a list from one slice and a status box from another. It depends on the UI of slices, through each slice's public entry, and on shared UI. It calls no use cases and makes no decisions. The composition root maps routes to screens.
   - A screen connects slices. It passes a value from one slice's UI to another's, such as the current user's id, and fills a slot in one slice's UI with another slice's UI, such as how an author's name is shown. A slice's UI takes what it needs from another slice as such a parameter, never as an import.
   - A slice's UI links only to its own slice's pages. A link to another slice's page is a parameter that the screen fills.
@@ -47,7 +49,7 @@ A slice is one capability of the product, such as transactions, budgets, or recu
 
 - Slices never depend on each other. When two slices need the same type or rule, it moves into the domain.
 - Ports belong to the domain, not to a slice. Any slice's use case may use any port, such as a use case that creates a note and checks its author through the user store.
-- Use cases are never shared. Each slice writes its own use cases, even when two of them look alike. The rules they use are shared, through the domain.
+- Use cases are never shared. Each slice writes its own use cases, even when two of them look alike, because orchestration may repeat and a decision may not. The rules they use are shared, through the domain.
 - A new capability gets a new slice. Do not grow an existing slice into something it was not made for.
 - Create a slice by copying the structure of the reference slice: its modules, its tests, and its wiring file.
 
@@ -66,7 +68,7 @@ Each rule exists once, under the name that `GLOSSARY.md` gives the concept. A co
 
 A use case makes no business decision. If you write an `if` about business meaning in a use case, it belongs in a domain rule that the use case calls.
 
-A use case stays even when it only calls one port. The UI reaches ports only through its slice's use cases, and the next business step of the operation has an obvious place.
+A use case is the one way from a slice's UI to the ports, and the architecture check fails when UI names a port. Keep the use case even when it only calls one port, so that no slice gets a second way that skips it, and the next business step of the operation has an obvious place. Keep it small, as a function or a type with one method, in the shape that the language guide shows.
 
 Orchestration may repeat across slices. A manual entry, an import, and a scheduled job may each load, validate, and save a transaction in their own use case. That is acceptable, because the knowledge sits in the rules and the rules are shared.
 
@@ -81,7 +83,7 @@ When code needs something from outside the process, the domain declares a port a
 - Every dependency arrives through a constructor or a parameter. There are no singletons, global registries, or service locators, so an agent can see what a piece of code depends on by reading it.
 - Each third-party library that performs I/O sits behind one adapter.
 - Add an interface only at a module boundary or to isolate something slow or nondeterministic. Inside a module, use concrete types.
-- A port stays even when it has one adapter. The port keeps the adapter's types out of the domain.
+- A port earns its place with one adapter, because it keeps the adapter's types and its I/O out of the domain and the use cases.
 - A port's results form a closed set of cases, such as a union of outcomes or a result with a closed set of errors. Callers and their tests can then handle every case, and the compiler shows every caller that misses a new one.
 
 ## Middleware
@@ -98,18 +100,15 @@ Four conditions keep middleware safe.
 3. Middleware sees writes, not intent. When intent matters, the composition root applies the middleware only to the slices with that intent. When the decision depends on the data, such as an alert only for today's transactions, a domain rule decides.
 4. The composition test covers each choice that matters. Unit tests of a slice build its use cases directly and never see the wiring.
 
-Middleware stays even when it passes most calls through unchanged. The step it adds is the reason it exists.
+Middleware passes most calls through unchanged. The step it adds to every write is the reason it exists. Because the port performs the step, no path can forget it. A wrapper that adds no such step has no reason, so leave it out.
 
 Before adding middleware, ask whether the data needs updating at all. A total that can be computed from stored data when it is read needs no middleware to keep it in sync.
 
 ## The composition root
 
-The composition root holds wiring and nothing else.
+The composition root holds wiring and nothing else, so a reader finds every choice of implementation in one place. Decisions belong in the domain or in a use case. Configuration and the environment are read here and passed in as values.
 
-- It has no control flow, apart from one configuration file and the error handling that the language requires. Decisions belong in the domain or in a use case.
-- It consists of a fixed set of files: the entry point, the container, the live dependencies, the configuration, and one wiring file per slice.
-- It has a size limit. Feature code that lands here fails the check.
-- Configuration and the environment are read here and passed in as values.
+The architecture check holds it to its file names, to wiring without control flow outside the configuration file, and to a line limit. Each failure names the fix.
 
 ## Boundaries
 
@@ -134,7 +133,7 @@ From these follow:
 - **The API is the authority.** A client runs the shared rules early, to answer the user before a request is sent. The API checks every request again, because the apps are deployed separately and a client may briefly run an older rule.
 - **Clients in other repositories get only the contract.** A mobile app in its own repository generates its client from the same contract and has no shared code. Its checks follow the constraints that the contract states, and the API's answer decides.
 
-A page that combines several features is a screen when it only shows what the slices already offer, unchanged. When the page needs data or decisions of its own, such as failed runs across every resource this week, it is a capability of its own: a new slice with its own use case, which reads the domain's ports. Slices still never import each other.
+A page that combines several features is a screen when it only shows what the slices already offer, unchanged. When the page needs data or decisions of its own, such as failed runs across every resource this week, it is a capability of its own, with a new slice and a use case that reads the domain's ports. Slices still never import each other.
 
 ## State and concurrency
 
@@ -157,31 +156,6 @@ A page that combines several features is a screen when it only shows what the sl
 - **Stored formats are pinned.** Each stored format has a committed file that an earlier version wrote, and a test that loads it, so a renamed field fails a test instead of old data. A migration that changes existing rows, such as one that adds a required column and fills it, gets a test that runs it on rows written by the previous version.
 - **Verification stays honest.** Every bug fix starts with a failing reproduction, committed before the fix: a test when a cheap one exists, otherwise a script or a recorded run against the running app. Prefer no new test to a test that mostly checks test doubles. No check is made to pass by deleting, skipping, or loosening a test, or by changing a gate file.
 
-## Where new code goes
-
-Ask these questions in order. The first yes decides.
-
-1. Does it decide something by business rules, or compute a business value? A domain rule.
-2. Does it describe a business concept? The domain model, with its name in `GLOSSARY.md`.
-3. Does it need something from outside the process? A port in the domain and an adapter.
-4. Must it happen on every write through a port? Middleware in the domain, applied in the composition root.
-5. Does it carry out an operation for one capability? A use case in that capability's slice.
-6. Is it a new capability? A new slice, in the shape of the reference slice.
-7. Does it show output or receive input? The UI module of its slice, or shared UI when several slices use it and it has no business meaning.
-8. Does it create objects, read configuration, or start the process? The composition root.
-9. Is it a helper with no business meaning? Utilities.
-
-In a repository with several apps, two questions come before the list:
-
-- Does another app in the repository need the same rule or model? The shared domain, without ports.
-- Does it arrange the UI of several slices on one page, with no data or decisions of its own? A screen.
-
-When the code needs something its module may not import:
-
-- If it needs an outside capability, add a port and pass the adapter in through the composition root.
-- If it needs something from another slice, move the shared part into the domain.
-- If a use case needs data in a form that only an adapter knows, map it to domain types in the adapter.
-
 ## How this is enforced
 
 - **The architecture check** (`tools/archcheck.py`, configured in `architecture.json`) maps every source file to a module and checks these things:
@@ -198,11 +172,13 @@ When the code needs something its module may not import:
 - **Gate files** define the checks: `architecture.json`, `check`, `tools/`, `.claude/`, `.github/`, the instruction files, the architecture docs, and the compiler, linter, and test runner settings. A change to them can loosen a check, so a code-owner rule requires the owner's review. Never change a gate file to make a check pass.
 - **The gate guard** (`tools/gateguard.py`) runs in CI on every pull request. It fails when the baseline gains a violation, or when an existing file in `checks/` changes or goes away. Lowering the baseline and adding a check only tighten the rules, so neither needs the owner.
 - **The Stop hook** runs `./check` before an agent finishes a task that changed files.
-- **The architecture reviewer** subagent checks the judgment calls in this document before a pull request is opened.
+- **Review** of every pull request, by people and by agents such as the reviewers of `/pstack:interrogate`, answers the questions in `docs/architecture/review.md`.
+- **The rule table** in `AGENTS.md` pairs each rule with what enforces it, so a rule that nothing enforces stands out.
 
 ## Changing code safely
 
 - Work in small steps that each leave the check green. Keep refactoring and behavior changes in separate steps.
-- Change a contract by expanding first and contracting later: add the new form, move the callers, then remove the old form.
+- Change an API inside the repository in one step. Move every caller to the new form and delete the old form in the same change, with no compatibility layer.
+- Stored formats, wire contracts, and data on installed clients are the exception, because old data and old clients outlive the change. Change them by expanding first and contracting later, as "Data outlives code" describes.
 - Build what the task needs and no more. Add options, modules, and dependencies when a need exists.
 - When existing code breaks these rules, write new code by the rules instead of copying the old code, and fix the old code in a separate change.

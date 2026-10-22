@@ -12,6 +12,8 @@ It works for Swift apps built from local packages, and for Go and TypeScript ser
 ```
 docs/ARCHITECTURE.md              the architecture, for agents and people (copied into each project)
 docs/architecture/<language>.md   the language rules for Swift, Go, and TypeScript
+docs/architecture/where-code-goes.md   which module new code belongs in
+docs/architecture/review.md       the questions every review answers
 tools/archcheck.py                the architecture check
 tools/new.py                      creates projects and adopts existing ones (runs from the kit only)
 tools/agent-stop-check.sh         Claude Code Stop hook that runs ./check
@@ -26,11 +28,11 @@ examples/                         pages that show the architecture in example pr
 
 Each project receives:
 
-- **The docs.** `docs/ARCHITECTURE.md`, its language guide, `docs/architecture/stack.md` for the project's libraries, and the generated module map.
+- **The docs.** `docs/ARCHITECTURE.md`, its language guide, `where-code-goes.md`, the review questions in `review.md`, `docs/architecture/stack.md` for the project's libraries, and the generated module map.
 - **The tools.** `tools/archcheck.py`, the Stop hook script, the gate guard, and `./check`, the one command that verifies everything. It also runs every executable in `checks/`, where agents add project checks.
 - **The configuration.** `architecture.json` maps directories to module kinds and sets the rules for each kind, and `architecture-baseline.json` holds the violations you have accepted.
-- **Agent instructions.** `AGENTS.md`, which names the reference slice, a `CLAUDE.md` that imports it, and a `README.md` to fill in with what the project does.
-- **Claude Code integration in `.claude/`.** The Stop hook, a path-scoped rule that points agents to the docs, the `new-slice` and `new-port` checklists, and the `architecture-reviewer` subagent.
+- **Agent instructions.** `AGENTS.md`, which names the reference slice, sends every review to the review questions, and pairs each rule with what enforces it. A `CLAUDE.md` that imports it, and a `README.md` to fill in with what the project does.
+- **Claude Code integration in `.claude/`.** The Stop hook, a path-scoped rule that points agents to the docs, and the `new-slice` and `new-port` checklists.
 - **Code owners.** `.github/CODEOWNERS` covers the gate files, which define the checks.
 - **CI.** `.github/workflows/check.yml` runs `./check` and, on every pull request, the gate guard. The guard fails when the baseline rises or an existing project check changes or goes away.
 - **The Notes reference slice.** A small working feature with a domain rule, a port, middleware, a slice, an adapter, tests that run against the real file store in a temporary directory, a file that pins the stored format, and a composition test.
@@ -96,7 +98,7 @@ The language guides describe the template layout. In a project with a different 
 
 The Stop hook runs `./check` with the PATH of the Claude Code session, so the session needs the project's toolchain, such as Node 24 and the package manager, on its PATH.
 
-Agents read `AGENTS.md` at the start of each task and the architecture docs when they touch code. They copy the structure of the reference slice, using the `new-slice` and `new-port` checklists, run `./check` after each step, and cannot finish a task while the check fails. Before a pull request, they ask the `architecture-reviewer` subagent for the judgment calls the check cannot make.
+Agents read `AGENTS.md` at the start of each task and the architecture docs when they touch code. They copy the structure of the reference slice, using the `new-slice` and `new-port` checklists, run `./check` after each step, and cannot finish a task while the check fails. Every review, including the reviewers of `/pstack:interrogate`, answers the questions in `docs/architecture/review.md` for the judgment calls the check cannot make.
 
 Your review stays small:
 
@@ -105,13 +107,14 @@ Your review stays small:
 
 The composition root needs no owner. The architecture check limits it to its files, to wiring without control flow, and to a line limit.
 
-When agents keep making the same mistake, improve the tooling instead of adding prose. Preferred fixes, in order:
+When agents keep making the same mistake, fix the repository instead of the next prompt. `/pstack:correct` finds the mistake classes in the history and fixes each at the highest level that works:
 
-1. A check, with the fix in its message.
-2. A better reference slice.
-3. A sentence in `docs/ARCHITECTURE.md`, only when nothing else can carry it.
+1. Make the mistake impossible, with the architecture or a better reference slice.
+2. Block it with a type, a rule in `architecture.json`, a lint rule, or a project check in `checks/`, with the fix in its message.
+3. Catch it with a test.
+4. Add a row to the rule table in `AGENTS.md`, or a sentence to the docs, only when nothing else can carry it.
 
-Upgrade a project to a newer kit by copying `tools/archcheck.py`, `tools/agent-stop-check.sh`, `docs/ARCHITECTURE.md`, and the project's language guide from `docs/architecture/` out of the kit, then running `./check`. The kit owns these files, so the project does not edit them. Read the diff of the docs: a new rule may need a change in the project. Projects created before 2026-10-15 also have `tools/new.py`, which they can delete: new code now copies the reference slice.
+Upgrade a project to a newer kit by copying `tools/archcheck.py`, `tools/gateguard.py`, `tools/agent-stop-check.sh`, `docs/ARCHITECTURE.md`, and from `docs/architecture/` the project's language guide, `where-code-goes.md`, and `review.md` out of the kit, then running `./check`. The kit owns these files, so the project does not edit them. Read the diff of the docs, because a new rule may need a change in the project. Projects created before 2026-10-15 also have `tools/new.py`, which they can delete, because new code copies the reference slice.
 
 TypeScript projects created before 2026-10-19 have no linter. To add it:
 
