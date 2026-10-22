@@ -29,7 +29,7 @@ Each project receives:
 - **The tools.** `tools/archcheck.py`, the Stop hook script, the gate guard, and `./check`, the one command that verifies everything. It also runs every executable in `checks/`, where agents add project checks.
 - **The configuration.** `architecture.json` maps directories to module kinds and sets the rules for each kind, and `architecture-baseline.json` holds the violations you have accepted.
 - **Agent instructions.** `AGENTS.md`, which names the reference slice, sends every review to the review questions, and pairs each rule with what enforces it. A `CLAUDE.md` that imports it, and a `README.md` to fill in with what the project does.
-- **Claude Code integration in `.claude/`.** The Stop hook, a path-scoped rule that points agents to the docs, the `new-slice` and `new-port` checklists, and pstack, enabled from its upstream marketplace.
+- **Claude Code integration in `.claude/`.** The Stop hook, a path-scoped rule that points agents to the docs, the `new-slice` and `new-port` checklists, the `deslop` skill, and pstack, enabled from its upstream marketplace.
 - **Code owners.** `.github/CODEOWNERS` covers the gate files, which define the checks.
 - **CI.** `.github/workflows/check.yml` runs `./check` and, on every pull request, the gate guard. The guard fails when the baseline rises or an existing project check changes or goes away.
 - **A verification skill, for Go and TypeScript.** `.claude/skills/verify-<name>/` starts the service on a temporary data directory, sends requests to it, and keeps each request and response as evidence. Its feature map covers the Notes slice and grows with the project. For Swift, generate one with `/pstack:create-verification-skill` once the Xcode project exists.
@@ -114,7 +114,7 @@ When agents keep making the same mistake, fix the repository instead of the next
 3. Catch it with a test.
 4. Add a row to the rule table in `AGENTS.md`, or a sentence to the docs, only when nothing else can carry it.
 
-Upgrade a project to a newer kit by copying `tools/archcheck.py`, `tools/gateguard.py`, `tools/agent-stop-check.sh`, `docs/ARCHITECTURE.md`, and from `docs/architecture/` the project's language guide, `where-code-goes.md`, and `review.md` out of the kit, then running `./check`. The kit owns these files, so the project does not edit them. Read the diff of the docs, because a new rule may need a change in the project. Projects created before 2026-10-15 also have `tools/new.py`, which they can delete, because new code copies the reference slice.
+Upgrade a project to a newer kit by copying `tools/archcheck.py`, `tools/gateguard.py`, `tools/agent-stop-check.sh`, `docs/ARCHITECTURE.md`, from `docs/architecture/` the project's language guide, `where-code-goes.md`, and `review.md`, and `.claude/skills/deslop/` out of the kit, then running `./check`. The kit owns these files, so the project does not edit them. Read the diff of the docs, because a new rule may need a change in the project. Projects created before 2026-10-15 also have `tools/new.py`, which they can delete, because new code copies the reference slice.
 
 TypeScript projects created before 2026-10-19 have no linter. To add it:
 
@@ -143,7 +143,7 @@ Projects use upstream pstack, unchanged. The template's `.claude/settings.json` 
 "enabledPlugins": {"pstack@cursor-plugins": true}
 ```
 
-Claude Code registers the marketplace after a contributor accepts the workspace trust dialog. Cloud sessions show no such dialog, so install the plugin there with `/plugin marketplace add cursor/plugins` and `/plugin install pstack@cursor-plugins`. Run `/pstack:setup-pstack` once to pick the models, then type `/pstack:poteto-mode` before a task that needs rigor. pstack's own adapter maps its Cursor names to Claude Code, and skips steps that need a Cursor-only feature, such as Bugbot. pstack also calls `/deslop` and the `control-ui` and `control-cli` skills from Cursor's cursor-team-kit, which the marketplace does not offer to Claude Code. Ask for the same cleanup in plain words, as pstack's guide says, and drive the app with the verification skill.
+Claude Code registers the marketplace after a contributor accepts the workspace trust dialog. Cloud sessions show no such dialog, so install the plugin there with `/plugin marketplace add cursor/plugins` and `/plugin install pstack@cursor-plugins`. Run `/pstack:setup-pstack` once to pick the models, then type `/pstack:poteto-mode` before a task that needs rigor. pstack's own adapter maps its Cursor names to Claude Code, and skips steps that need a Cursor-only feature, such as Bugbot. pstack also runs `/deslop` before each commit, and the `control-ui` and `control-cli` skills to drive an app. All three come from Cursor's cursor-team-kit plugin, which the marketplace does not offer to Claude Code. The kit ships cursor-team-kit's `deslop` skill unchanged in `.claude/skills/deslop/`, with its MIT license, as of cursor/plugins commit eb4db2b. To update it, copy `cursor-team-kit/skills/deslop/SKILL.md` from a newer commit. The verification skill drives the app in place of the control skills.
 
 The architecture holds in a pstack session for these reasons:
 
@@ -158,12 +158,13 @@ The Stop hook runs only when the main session finishes. pstack's subagents inher
 1. Copy `tools/archcheck.py`, `tools/gateguard.py`, `tools/agent-stop-check.sh`, `docs/ARCHITECTURE.md`, and from `docs/architecture/` the language guide, `where-code-goes.md`, and `review.md` out of the kit.
 2. In `architecture.json`, add `"scriptFiles": ["scripts/**", "checks/**"]`. Add `portFiles`, and `"forbidPorts": true` on each UI kind, if the project has neither yet. Add `.scratch/` and `.verify/` to `.gitignore`.
 3. In TypeScript, add `scripts` and `checks` to the `include` of `tsconfig.json` and to the files of the type-assertion rule in the linter settings. Remove the domain from that rule's excluded files, and replace each type assertion in the domain with a type guard, like `isNoteTitle`.
-4. Add the loop over `checks/` to `./check`, and make the gate guard step in `.github/workflows/check.yml` run on every pull request, as in the language template.
-5. Replace `.github/CODEOWNERS` with the template's, so that the composition root, the baseline, and the verification skills need no owner.
-6. Replace `AGENTS.md` and `CLAUDE.md` with the template's. Keep the project's reference slice and its own rows in the rule table. Delete `.claude/agents/architecture-reviewer.md`.
-7. In `.claude/settings.json`, replace the lines for `pstack@agent-architecture-kit` with the template's lines for `pstack@cursor-plugins`.
-8. Run `/pstack:create-verification-skill`, or copy the template's verification skill and change its launch line.
-9. Rewrite the reference slice's tests to run against the real adapter, as the template's do. Commit a sample of each stored format, with a test that loads it.
+4. Copy the language template's `check` over the project's, and merge back the project's own steps. It runs each executable in `checks/`, and keeps its work in one function, so that no step can rewrite the rest of the script. In `.github/workflows/check.yml`, make the gate guard step run on every pull request, and replace the step that diffs the module map with `git diff --exit-code`, as in the language template.
+5. Copy `templates/common/.claude/skills/deslop/` into `.claude/skills/`.
+6. Replace `.github/CODEOWNERS` with the template's, so that the composition root, the baseline, and the verification skills need no owner.
+7. Replace `AGENTS.md` and `CLAUDE.md` with the template's. Keep the project's reference slice and its own rows in the rule table. Delete `.claude/agents/architecture-reviewer.md`.
+8. In `.claude/settings.json`, replace the lines for `pstack@agent-architecture-kit` with the template's lines for `pstack@cursor-plugins`.
+9. Run `/pstack:create-verification-skill`, or copy the template's verification skill and change its launch line.
+10. Rewrite the reference slice's tests to run against the real adapter, as the template's do. Commit a sample of each stored format, with a test that loads it.
 
 Run `./check` after each step.
 
@@ -293,6 +294,11 @@ Retested the same day, after an independent review found holes in the gate guard
 - **Project checks.** A non-executable helper file and a folder in `checks/` are skipped, and `./check` passes.
 - **Verification skill.** In a project inside a larger git repository, the run directory lands in the project. A second `stop` does nothing.
 - **Code owners.** A new TypeScript project's `CODEOWNERS` owns `package.json` and `package-lock.json` again, so an install script can't switch off `./check` without your review.
+
+Retested later that day, after `deslop` was added and `./check` moved its work into one function:
+
+- **A step that rewrites `./check`.** A test that overwrote `check` while it ran, together with a real architecture violation, made the old script print `FAIL architecture` and still exit 0. The new script exits 1, and the CI step `git diff --exit-code` fails on the rewritten file.
+- **`deslop`.** `init` copies the skill and its license into `.claude/skills/deslop/`, unchanged from cursor/plugins at commit eb4db2b.
 
 Not tested:
 

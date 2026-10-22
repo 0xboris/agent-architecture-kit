@@ -174,6 +174,7 @@ A passing check does not show that a change works. Before a change is done, driv
 - **Gate files** define the checks: `architecture.json`, `check`, `tools/`, `.claude/`, `.github/`, the instruction files, the architecture docs, and the compiler, linter, and test runner settings. A change to them can loosen a check, so a code-owner rule requires the owner's review. Never change a gate file to make a check pass.
 - **The gate guard** (`tools/gateguard.py`) runs in CI on every pull request. It fails when the baseline gains a violation, or when an existing file in `checks/` changes or goes away. Lowering the baseline and adding a check only tighten the rules, so neither needs the owner. A pull request that loosens one of them passes only when it also changes a gate file, so that the owner reviews it.
 - **The Stop hook** runs `./check` before an agent finishes a task that changed files.
+- **CI** runs `./check`, then fails when any tracked file changed, so no step can pass by rewriting a check or a test.
 - **Review** of every pull request, by people and by agents, answers the questions in `docs/architecture/review.md`. An agent that runs `/pstack:interrogate` adds that file to the reviewers' rubric.
 - **The rule table** in `AGENTS.md` pairs each rule with what enforces it, so a rule that nothing enforces stands out.
 

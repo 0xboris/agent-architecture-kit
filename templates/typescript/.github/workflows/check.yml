@@ -21,8 +21,8 @@ jobs:
       - run: npm ci
       - name: Run the check
         run: ./check
-      - name: Fail if the module map is out of date
-        run: git diff --exit-code docs/architecture/modules.md
+      - name: Fail if ./check changed a tracked file, such as a check or an out-of-date module map
+        run: git diff --exit-code
       - name: Upload logs
         if: failure()
         uses: actions/upload-artifact@v4
