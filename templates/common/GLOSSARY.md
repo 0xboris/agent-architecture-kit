@@ -2,7 +2,7 @@
 
 One name for each business concept. Code, tests, and conversations use these names, and nothing else, for these concepts.
 
-Each concept is a level-2 heading. The architecture check reads the headings: utilities and shared UI may not use these words, because those modules have no business meaning.
+Each concept is a level-2 heading. The architecture check reads the headings and fails when utilities or shared UI use these words, because those modules have no business meaning.
 
 ## Note
 

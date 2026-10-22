@@ -17,7 +17,7 @@ This directory lists what the service does for its clients, and how to prove tha
 ## Proof and skip reporting
 
 - Capture the request and the resulting state, not only the response to a write.
-- Mutation proof includes a second request that reads the stored value back.
+- The proof of a write includes a second request that reads the stored value back.
 - Name the evidence file of each step in the report.
 - Report an unreachable path with the attempted command and the unmet precondition.
 

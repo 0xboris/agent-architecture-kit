@@ -12,8 +12,8 @@ description: Creates a feature slice in the shape of the reference slice that AG
    - in Swift, the targets and their dependencies in `Package.swift`
 4. Put every business decision in a domain rule and call it from the use case. Use cases only orchestrate.
 5. When the use case needs something from outside the process, follow the new-port skill.
-6. When another slice needs the same rule or type, move it into the domain. Slices never import each other, and use cases are never shared.
-7. Test the use case against the real adapters that run locally, as the reference slice does, and assert what reads back. Use the test support's failing store or fakes only for errors and for time, ids, and remote services.
+6. When another slice needs the same rule or type, move it into the domain. Slices never import each other or share a use case.
+7. Test the use case against the real adapters that run locally, as the reference slice does, and assert what you read back from them. Use the test support's failing store or fakes only for errors and for time, ids, and remote services.
 8. Decide in the wiring file which middleware this slice receives, and extend the composition test if the choice matters.
 9. In a repository with several apps, create the slice under the same name in each app that needs it. Start with the API: its routes, then the regenerated contract. Then build each client's slice on the regenerated client. Rules that both apps need go into the shared domain.
 10. When a page shows the slice's UI, add it to a screen. When the slice's UI needs something from another slice, such as a name for an id, take it as a parameter or a slot, and let the screen fill it.

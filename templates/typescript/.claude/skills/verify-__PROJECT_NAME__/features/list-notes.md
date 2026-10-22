@@ -24,4 +24,4 @@ Preconditions:
 
 ## Gotchas
 
-- Two notes created in the same millisecond are ordered by id, not by the order of the requests. Wait a second between the two creates.
+- The service orders two notes created in the same millisecond by id, not by the order of the requests. Wait a second between the two creates.

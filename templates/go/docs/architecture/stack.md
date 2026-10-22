@@ -1,6 +1,6 @@
 # Stack
 
-The libraries this project uses, and how the reference slice uses them. `docs/architecture/go.md` holds the rules that hold for any library. This file belongs to the project: when the project changes a library, it updates this file in the same change. Like everything in `docs/architecture/`, it is a gate file, so changes need the owner's review.
+This file names the libraries this project uses, and shows how the reference slice uses them. `docs/architecture/go.md` has the rules that apply to any library. This file belongs to the project, so the change that adds or replaces a library also updates this file. Like everything in `docs/architecture/`, it is a gate file, and the owner reviews changes to it.
 
 The kit's template uses the standard library only.
 
