@@ -35,6 +35,7 @@ Each project receives:
 - **Claude Code integration in `.claude/`.** The Stop hook, a path-scoped rule that points agents to the docs, and the `new-slice` and `new-port` checklists.
 - **Code owners.** `.github/CODEOWNERS` covers the gate files, which define the checks.
 - **CI.** `.github/workflows/check.yml` runs `./check` and, on every pull request, the gate guard. The guard fails when the baseline rises or an existing project check changes or goes away.
+- **A verification skill, for Go and TypeScript.** `.claude/skills/verify-<name>/` starts the service on a temporary data directory, sends requests to it, and keeps each request and response as evidence. Its feature map covers the Notes slice and grows with the project. For Swift, generate one with `/pstack:create-verification-skill` once the Xcode project exists.
 - **The Notes reference slice.** A small working feature with a domain rule, a port, middleware, a slice, an adapter, tests that run against the real file store in a temporary directory, a file that pins the stored format, and a composition test.
 
 ## Requirements
@@ -69,6 +70,7 @@ Then, in the new folder:
    - Delete the `ContentView.swift` and `<Name>App.swift` files that Xcode generated, and add `App/<Name>App.swift` to the app target.
    - Use File > Add Package Dependencies > Add Local to add `Packages/AppModules`, and link the `AppComposition` library to the app target.
    - Add an iOS build of the app to CI, as `docs/architecture/swift.md` describes.
+   - Run `/pstack:create-verification-skill` to get a skill that drives the app in the simulator and keeps the evidence.
 3. Commit, push, and set up branch protection on `main`: require pull requests, require code-owner reviews, and require the `check` workflow.
 4. To use other libraries than the template's, follow "Changing a library" in `docs/architecture/stack.md`. Rewrite the Notes slice with them first, so agents copy the right patterns.
 5. Let agents use the Notes slice as their reference. Once your first real slice exists and follows the same patterns, delete the Notes slice, its tests, its wiring, and its glossary entries, and name the new slice as the reference in `AGENTS.md`. If the product itself has notes, its notes feature grows from the Notes slice, which stays the reference.
@@ -89,8 +91,9 @@ python3 path/to/kit/tools/new.py adopt go ~/Dev/legacy-service --owner @your-git
 4. **Turn on the gates.** Add `@AGENTS.md` as the first line of an existing `CLAUDE.md`, commit `.claude/`, set the owner in `CODEOWNERS`, and enable branch protection as for a new project.
 5. **Describe the stack and pick a reference.** Rewrite `docs/architecture/stack.md` for the project's libraries, and allow them per kind in `architecture.json`. Name a reference slice in `AGENTS.md`: the existing slice that best follows the architecture, or one you rebuild in that shape, using the kit's Notes slice as the model.
 6. **Write the glossary.** List the business concepts the code already uses, one heading each.
-7. **Put new work in the new shape.** New capabilities become slices in the shape of the reference slice. New rules go into the domain. New I/O goes behind ports.
-8. **Fix old code as you touch it.** When a change touches a module with violations, fix them in a separate commit and run `--write-baseline` to lower the counts. The baseline only ever goes down. The gate guard fails a pull request that raises it, and lowering it needs no owner.
+7. **Get a verification skill.** Run `/pstack:create-verification-skill`. It writes `.claude/skills/verify-<name>/`, which drives the app the way a user does and keeps the evidence, and proves it once before it hands it over.
+8. **Put new work in the new shape.** New capabilities become slices in the shape of the reference slice. New rules go into the domain. New I/O goes behind ports.
+9. **Fix old code as you touch it.** When a change touches a module with violations, fix them in a separate commit and run `--write-baseline` to lower the counts. The baseline only ever goes down. The gate guard fails a pull request that raises it, and lowering it needs no owner.
 
 The language guides describe the template layout. In a project with a different layout, either move toward the template layout over time, or keep the existing layout mapped in `architecture.json` and name as the reference the slice that follows the architecture best.
 

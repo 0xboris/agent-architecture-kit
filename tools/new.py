@@ -174,6 +174,7 @@ def adopt(args):
         f"Wire {check_target} into your build and CI, and adjust its build and test commands to this project.",
         "If CLAUDE.md already existed, add the line `@AGENTS.md` at its top.",
         "Name a reference slice in AGENTS.md: the existing slice that best follows docs/ARCHITECTURE.md, or one you rebuild in that shape.",
+        "Run /pstack:create-verification-skill, so agents can drive the app and keep the evidence.",
         "Fill in GLOSSARY.md, then follow the adoption steps in the kit's README.",
     ]:
         print(f"  - {step}")

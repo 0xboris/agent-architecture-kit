@@ -44,6 +44,7 @@ oxlint with type-aware rules, in `.oxlintrc.json`. oxlint-tsgolint gives the typ
 
 - `npm install` installs the dependencies. `./check` runs it when `node_modules` is missing.
 - `./check` runs the architecture check, oxlint, `tsc --noEmit`, and `node --test`. CI runs `npm ci` and then `./check`.
+- `.claude/skills/verify-<name>/scripts/app` starts the service on a temporary data directory, sends requests to it, and keeps each request and response as evidence. Its `SKILL.md` has the steps.
 - `npm run lint` runs oxlint alone.
 
 ## Changing a library

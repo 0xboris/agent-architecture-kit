@@ -9,6 +9,7 @@ The reference slice is **Notes**. Copy its structure when you add a slice, a use
 ## Commands
 
 - `./check` runs the architecture check, the build, the types, the tests, and the project checks in `checks/`. Run it after each step. A change is done when the check passes and you have shown the change working in the running app.
+- The `verify-*` skill in `.claude/skills/` starts the app on a temporary data directory, drives it, and keeps the evidence. Its feature map lists what the app does. A project without one gets it from `/pstack:create-verification-skill`.
 - The `new-slice` and `new-port` skills list the files that a new slice or port needs.
 
 ## How to work here

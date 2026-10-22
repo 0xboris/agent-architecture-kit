@@ -144,7 +144,9 @@ A page that combines several features is a screen when it only shows what the sl
 
 ## Verification
 
-`./check` runs everything: the architecture check, the build, the type checker, and the tests. It runs the same way locally, in the agent's Stop hook, and in CI. The main branch always passes it.
+`./check` runs the architecture check, the build, the type checker, the tests, and the project checks in `checks/`. It runs the same way locally, in the agent's Stop hook, and in CI. The main branch always passes it.
+
+A passing check does not show that a change works. Before a change is done, drive it in the running app the way its users would, and keep the evidence. The project's verification skill in `.claude/skills/verify-*/` starts a disposable instance, drives it, and saves each step. Its feature map lists what the app does and what proves each feature, and it changes with the code.
 
 - **Machines check first.** A failure at build time beats a failing test, and a failing test beats a review comment.
 - **Most tests are domain tests.** Rules are pure, so their tests need no test doubles and run in milliseconds.

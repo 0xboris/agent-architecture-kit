@@ -17,4 +17,5 @@ description: Creates a feature slice in the shape of the reference slice that AG
 8. Decide in the wiring file which middleware this slice receives, and extend the composition test if the choice matters.
 9. In a repository with several apps, create the slice under the same name in each app that needs it. Start with the API: its routes, then the regenerated contract. Then build each client's slice on the regenerated client. Rules that both apps need go into the shared domain.
 10. When a page shows the slice's UI, add it to a screen. When the slice's UI needs something from another slice, such as a name for an id, take it as a parameter or a slot, and let the screen fill it.
-11. Run `./check` after each step, and finish when it passes.
+11. Add the slice's features to the feature map of the verification skill in `.claude/skills/verify-*/`, in the shape of the Notes feature files.
+12. Run `./check` after each step. Finish when it passes and the verification skill shows each new entry point working, with the evidence named in your report.

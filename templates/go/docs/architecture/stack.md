@@ -35,6 +35,8 @@ The `filestore` adapter keeps the notes in a JSON file. It stands in for a real 
 
 `./check` runs the architecture check, `gofmt`, `go vet`, and `go test -race -shuffle=on`. Run `go mod tidy` after adding a dependency.
 
+`.claude/skills/verify-<name>/scripts/app` starts the service on a temporary data directory, sends requests to it, and keeps each request and response as evidence. Its `SKILL.md` has the steps.
+
 ## Changing a library
 
 1. Allow the new package for the kinds that use it in `architecture.json`, under `external.allow`. Frameworks belong in UI, adapters, and the composition root, never in the domain or use cases. A pure package that does no I/O, such as a decimal package, may go in the domain. Other packages then use only the domain's types and parse functions, and the domain maps the package's errors to its own errors. A major upgrade of the package then changes only the domain.
