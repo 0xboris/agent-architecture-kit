@@ -26,7 +26,7 @@ Packages/AppModules/
 
 A new slice copies the reference slice: its two targets, their test targets, and `AppContainer+<Slice>.swift`. Add the targets to `Package.swift` next to the reference slice's targets, and add the UI and use case targets to the dependencies of `AppComposition`. Declare every target that a target's files import. The check builds with `--explicit-target-dependency-import-check=error`, because SwiftPM otherwise lets a target import any module that happens to be built.
 
-SwiftPM does not stop a target from importing a system framework such as SwiftUI or CoreData. The architecture check does: each kind lists the frameworks it may import in `architecture.json`.
+SwiftPM does not stop a target from importing a system framework such as SwiftUI or CoreData. The architecture check does, because each kind lists the frameworks it may import in `architecture.json`.
 
 ## Domain
 
@@ -35,7 +35,7 @@ SwiftPM does not stop a target from importing a system framework such as SwiftUI
 - **Ports.** Protocols that refine `Sendable`. Their methods are `async throws` when the real implementation does I/O. When a call has several expected outcomes, return an enum of them, so that callers handle each one. The time port is `TimeSource`, because `Clock` is a standard library protocol.
 - **Middleware.** A struct that conforms to the port and wraps another instance of it, like `LoggingNoteStore`.
 
-The domain imports only Foundation, for value types such as `Date` and `UUID`. It must not call `Date()`, `UUID()`, `FileManager`, `UserDefaults`, `Locale.current`, or similar APIs; the check lists them. Take the time and ids from ports.
+The domain imports only Foundation, for value types such as `Date` and `UUID`. It must not call `Date()`, `UUID()`, `FileManager`, `UserDefaults`, `Locale.current`, or similar APIs. The check lists them. Take the time and ids from ports.
 
 ## Slices
 

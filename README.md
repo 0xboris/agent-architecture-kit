@@ -5,7 +5,7 @@ This kit sets up a codebase that coding agents can extend without eroding it. It
 - **A shared architecture.** Horizontal layers, vertical feature slices, ports, middleware, and a composition root, written down in `docs/ARCHITECTURE.md`.
 - **Tooling that enforces it.** A check fails on wrong imports and misplaced code, a reference slice shows agents the shape of new code, and Claude Code integration runs the check before an agent finishes.
 
-It works for Swift apps built from local packages, and for Go and TypeScript services. It does not depend on a framework: frameworks are allowed per module kind in `architecture.json`, and the reference slice shows how the project uses them.
+It works for Swift apps built from local packages, and for Go and TypeScript services. It does not depend on a framework. Frameworks are allowed per module kind in `architecture.json`, and the reference slice shows how the project uses them.
 
 ## What is in the kit
 
@@ -18,9 +18,6 @@ tools/archcheck.py                the architecture check
 tools/new.py                      creates projects and adopts existing ones (runs from the kit only)
 tools/agent-stop-check.sh         Claude Code Stop hook that runs ./check
 tools/gateguard.py                CI check that keeps the baseline and the project checks from loosening
-tools/vendor_pstack.py            builds the kit's copy of pstack (runs from the kit only)
-.claude-plugin/marketplace.json   the kit as a Claude Code plugin marketplace
-plugins/                          the kit's copy of pstack, and how it differs from upstream
 templates/common/                 AGENTS.md, CLAUDE.md, GLOSSARY.md, .claude/, CODEOWNERS
 templates/swift|go|typescript/    a working project with the Notes reference slice and its stack.md
 examples/                         pages that show the architecture in example projects (not copied into projects)
@@ -32,7 +29,7 @@ Each project receives:
 - **The tools.** `tools/archcheck.py`, the Stop hook script, the gate guard, and `./check`, the one command that verifies everything. It also runs every executable in `checks/`, where agents add project checks.
 - **The configuration.** `architecture.json` maps directories to module kinds and sets the rules for each kind, and `architecture-baseline.json` holds the violations you have accepted.
 - **Agent instructions.** `AGENTS.md`, which names the reference slice, sends every review to the review questions, and pairs each rule with what enforces it. A `CLAUDE.md` that imports it, and a `README.md` to fill in with what the project does.
-- **Claude Code integration in `.claude/`.** The Stop hook, a path-scoped rule that points agents to the docs, and the `new-slice` and `new-port` checklists.
+- **Claude Code integration in `.claude/`.** The Stop hook, a path-scoped rule that points agents to the docs, the `new-slice` and `new-port` checklists, and pstack, enabled from its upstream marketplace.
 - **Code owners.** `.github/CODEOWNERS` covers the gate files, which define the checks.
 - **CI.** `.github/workflows/check.yml` runs `./check` and, on every pull request, the gate guard. The guard fails when the baseline rises or an existing project check changes or goes away.
 - **A verification skill, for Go and TypeScript.** `.claude/skills/verify-<name>/` starts the service on a temporary data directory, sends requests to it, and keeps each request and response as evidence. Its feature map covers the Notes slice and grows with the project. For Swift, generate one with `/pstack:create-verification-skill` once the Xcode project exists.
@@ -85,7 +82,7 @@ python3 path/to/kit/tools/new.py adopt go ~/Dev/legacy-service --owner @your-git
 
 `adopt` adds the docs, tools, agent instructions, `.claude/`, and `CODEOWNERS` without overwriting files that exist. It adds `architecture.json` and `docs/architecture/stack.md` from the language template. It writes `check` if the project has none, or `check.kit` if it does. Then:
 
-1. **Map every directory to a kind.** Edit `modules` in `architecture.json` until `python3 tools/archcheck.py` reports no unmapped file. A module path is a directory; `{"path": "."}` maps the repository root, for example a Go `main.go`. Pick the kind by what the code does today: handlers are `ui`, database code is `adapter`, and models and business logic are `domain`.
+1. **Map every directory to a kind.** Edit `modules` in `architecture.json` until `python3 tools/archcheck.py` reports no unmapped file. A module path is a directory, and `{"path": "."}` maps the repository root, for example a Go `main.go`. Pick the kind by what the code does today: handlers are `ui`, database code is `adapter`, and models and business logic are `domain`.
 2. **Accept what exists.** Run `python3 tools/archcheck.py --write-baseline`. From now on the check fails only on new violations.
 3. **Wire up `./check`.** Make it run your real build and tests. If you got `check.kit`, merge its architecture steps into your existing check.
 4. **Turn on the gates.** Add `@AGENTS.md` as the first line of an existing `CLAUDE.md`, commit `.claude/`, set the owner in `CODEOWNERS`, and enable branch protection as for a new project.
@@ -122,44 +119,53 @@ Upgrade a project to a newer kit by copying `tools/archcheck.py`, `tools/gategua
 TypeScript projects created before 2026-10-19 have no linter. To add it:
 
 1. Copy `templates/typescript/.oxlintrc.json` to the project root, and change the paths in its `overrides` to the project's source and domain directories. In a repository with several apps, `docs/architecture/typescript.md` says which paths to use.
-2. Add `oxlint` and `oxlint-tsgolint` to `devDependencies`, at the versions in `templates/typescript/package.json`. A project on TypeScript 6 or below can keep ESLint with typescript-eslint instead; the rules in the language guide hold either way.
+2. Add `oxlint` and `oxlint-tsgolint` to `devDependencies`, at the versions in `templates/typescript/package.json`. A project on TypeScript 6 or below can keep ESLint with typescript-eslint instead. The rules in the language guide hold either way.
 3. Add `step lint npx oxlint` to `./check`, before the type check, and add `/.oxlintrc.json` to `.github/CODEOWNERS`.
 4. Run `npx oxlint` and fix what it reports. Most findings in tests are stubs written as `async` functions without `await`, and JSON responses read as `any`.
 5. Describe the linter in `docs/architecture/stack.md`, as the template's copy does.
 
-## Workflow plugins such as pstack
+## pstack
 
-A workflow plugin decides how an agent works: which steps it takes, which subagents it spawns, and how it reviews and lands its pull requests. [pstack](https://github.com/cursor/plugins/tree/main/pstack) is one. The kit decides where code goes and fails the check when code goes elsewhere. The two work together, with the kit's rules on top.
+[pstack](https://github.com/cursor/plugins/tree/main/pstack) decides how an agent works: which playbook it follows, which subagents it spawns, how it proves its work, and how it reviews and lands pull requests. The kit decides where code goes, and fails the check when code goes elsewhere. The kit follows pstack's principles, so an agent reads one set of rules:
 
-The kit serves its own copy of pstack with ten edits, which `plugins/README.md` lists. Read literally, a few pstack rules remove layers that the architecture requires, replace the stubs that its testing rules prescribe, or tell the agent to fix a failing check itself. Each edit scopes one such rule to what the repository's architecture docs allow, so the agent reads one set of rules instead of two that disagree. The edits name no part of the kit, and `plugins/README.md` describes how to propose them upstream. Once upstream has them, enable `pstack@cursor-plugins` instead.
+- **Layers.** Each layer of the architecture states a reason that pstack's own rules accept, so Minimize Reader Load and the design red flags keep it. A wrapper without such a reason has none, and the docs say to leave it out.
+- **Tests.** Tests run against real adapters wherever those run locally, and test doubles only make a port fail or stand in for time, ids, and remote services. That is what pstack's TypeScript rules and Test Behavior, Not Implementation ask.
+- **Proof.** A change is done when the verification skill shows it working in the running app, not when it compiles.
+- **Gates.** The gates hold only what loosens a check. `/pstack:correct`, Build the Lever, and the verification skills tighten the repository without waiting for you.
+- **Review.** Every review answers `docs/architecture/review.md`, including the reviewers of `/pstack:interrogate`, and `AGENTS.md` keeps the rule table that `/pstack:correct` maintains.
 
-To enable the kit's copy for everyone who works on a project, add this to `.claude/settings.json`. It is a gate file, so commit the change yourself.
+Projects use upstream pstack, unchanged. The template's `.claude/settings.json` enables it for everyone who works on the project:
 
 ```json
 "extraKnownMarketplaces": {
-  "agent-architecture-kit": {"source": {"source": "github", "repo": "0xboris/agent-architecture-kit"}}
+  "cursor-plugins": {"source": {"source": "github", "repo": "cursor/plugins"}}
 },
-"enabledPlugins": {"pstack@agent-architecture-kit": true}
+"enabledPlugins": {"pstack@cursor-plugins": true}
 ```
 
-Claude Code registers the marketplace after a contributor accepts the workspace trust dialog, and only for contributors who can read the kit's repository. Cloud sessions show no such dialog, so install the plugin there with `/plugin install pstack@agent-architecture-kit`. Then type `/pstack:poteto-mode` before a task.
+Claude Code registers the marketplace after a contributor accepts the workspace trust dialog. Cloud sessions show no such dialog, so install the plugin there with `/plugin marketplace add cursor/plugins` and `/plugin install pstack@cursor-plugins`. Run `/pstack:setup-pstack` once to pick the models, then type `/pstack:poteto-mode` before a task that needs rigor. pstack's own adapter maps its Cursor names to Claude Code, and skips steps that need a Cursor-only feature, such as Bugbot.
 
 The architecture holds in a pstack session for these reasons:
 
 - **The check.** The Stop hook runs `./check` in the checkout or git worktree the session works in. UI that uses a port fails the check, so an agent cannot replace a use case by calling its port from the UI.
-- **The gates.** Branch protection and `CODEOWNERS` hold every change to a gate file on main for your review, and the gate guard keeps the baseline and the project checks from loosening. pstack's autonomous playbooks merge pull requests on their own but never bypass an approval that GitHub enforces. This works only when agents open pull requests under their own account, as described under "Start a new project".
-- **The kit's copy of pstack.** Its rules keep the layers that `docs/ARCHITECTURE.md` requires, and it treats an owner's gate as a gate, not as a tooling failure.
-- **The precedence section.** The "Skills and plugins" section in `AGENTS.md` covers what no edit does: a failing check is a finding in the code, and rules and checks that a workflow writes are gate changes. Claude Code loads it in every session and in pstack's subagents.
-- **The reviewer.** The `architecture-reviewer` subagent runs before each pull request, next to pstack's own reviews.
+- **The gates.** Branch protection and `CODEOWNERS` hold every change to a gate file on main for your review. pstack's autopilot playbooks merge pull requests on their own, but never give or bypass an approval that GitHub enforces. This works only when agents open pull requests under their own account, as described under "Start a new project".
+- **The verification skill.** pstack's playbooks prove each change in the running app, and the verification skill is how they drive it in a kit project.
 
-The Stop hook runs only when the main session finishes. pstack's subagents run `./check` because `AGENTS.md` tells them to, and the main session's Stop hook checks their combined work. If the main session ends a turn while subagents still edit files, the hook can report failures in their unfinished work.
+The Stop hook runs only when the main session finishes. pstack's Opening a PR playbook gives each subagent that writes code its own git worktree, so the main checkout holds only the main session's changes, and CI checks the subagents' pull requests. A subagent that edits the main checkout instead can leave unfinished work that the hook reports.
 
-Projects created before 2026-10-21 get all of this, the port check and the gate guard included, with these steps:
+### Upgrade a project created before 2026-10-22
 
-1. Copy `tools/archcheck.py`, `tools/gateguard.py`, and `tools/agent-stop-check.sh` from the kit.
-2. In `architecture.json`, add `portFiles` with the files that declare the ports, and `"forbidPorts": true` to each UI kind, as the language template does. Run `./check` and fix or baseline what it reports.
-3. Add the gate guard step and `fetch-depth: 2` to `.github/workflows/check.yml`, as in the language template.
-4. Copy the "Skills and plugins" section of `templates/common/AGENTS.md` into the project's `AGENTS.md`, and question 13 of `templates/common/.claude/agents/architecture-reviewer.md` into the project's reviewer.
+1. Copy `tools/archcheck.py`, `tools/gateguard.py`, `tools/agent-stop-check.sh`, `docs/ARCHITECTURE.md`, and from `docs/architecture/` the language guide, `where-code-goes.md`, and `review.md` out of the kit.
+2. In `architecture.json`, add `"scriptFiles": ["scripts/**", "checks/**"]`. Add `portFiles`, and `"forbidPorts": true` on each UI kind, if the project has neither yet. Add `.scratch/` and `.verify/` to `.gitignore`.
+3. In TypeScript, add `scripts` and `checks` to the `include` of `tsconfig.json` and to the files of the type-assertion rule in the linter settings. Remove the domain from that rule's excluded files, and replace each type assertion in the domain with a type guard, like `isNoteTitle`.
+4. Add the loop over `checks/` to `./check`, and make the gate guard step in `.github/workflows/check.yml` run on every pull request, as in the language template.
+5. Replace `.github/CODEOWNERS` with the template's, so that the composition root, the dependency files, the baseline, and the verification skills need no owner.
+6. Replace `AGENTS.md` and `CLAUDE.md` with the template's. Keep the project's reference slice and its own rows in the rule table. Delete `.claude/agents/architecture-reviewer.md`.
+7. In `.claude/settings.json`, replace the lines for `pstack@agent-architecture-kit` with the template's lines for `pstack@cursor-plugins`.
+8. Run `/pstack:create-verification-skill`, or copy the template's verification skill and change its launch line.
+9. Rewrite the reference slice's tests to run against the real adapter, as the template's do. Add a committed file in each stored format, with a test that loads it.
+
+Run `./check` after each step.
 
 ## Autopilot with pstack
 
@@ -271,7 +277,15 @@ Retested on Linux on 2026-10-21, after the port check, the gate guard, and the k
 
 - **Port check.** `init` creates TypeScript, Go, and Swift projects whose architecture check passes. A port used in a slice's UI fails in all three, also as a qualified name such as `domain.NoteStore` in Go. A port named in a comment or a string passes. The baseline accepts the violation. A UI kind with `forbidPorts` and no `portFiles` is a configuration error. Swift was checked with the architecture check only, without a Swift build.
 - **Gate guard.** I ran the script directly in a TypeScript and a Go project. It passes wiring changes in the composition root, a new slice, a glossary entry, and the generated module map. It fails on `architecture.json`, `package.json`, `go.mod`, and a deleted `.claude/settings.json`. The workflow step itself has not run on GitHub yet.
-- **The kit's copy of pstack.** `tools/vendor_pstack.py` applied all ten edits to cursor/plugins at commit 190d287, and upstream's generator check and plugin validator pass on the result. `claude plugin validate` passes on the marketplace and the plugin, and Claude Code installs `pstack@agent-architecture-kit` from a local clone of the kit.
+- **The kit's copy of pstack.** `tools/vendor_pstack.py` applied all ten edits to cursor/plugins at commit 190d287, and upstream's generator check and plugin validator pass on the result. `claude plugin validate` passes on the marketplace and the plugin, and Claude Code installs `pstack@agent-architecture-kit` from a local clone of the kit. The kit removed its copy on 2026-10-22.
+
+Retested on Linux on 2026-10-22 with Python 3.13, Node 22.22, TypeScript 7.0.2, oxlint 1.88.0, and Go 1.24.7, after the kit was aligned with upstream pstack and its copy of pstack was removed. The kit requires Node 24, so the TypeScript template still needs a run on Node 24.
+
+- **New projects.** `init typescript` and `init go` create projects whose `./check` passes, with the reference slice's tests running against the real file store. In both languages, a renamed stored field fails the test that loads the committed file in that format, and only that test. In TypeScript, `as NoteTitle` in the domain fails lint.
+- **Gate guard.** I ran it in a git repository of a TypeScript project. It passes a new check in `checks/` and a lower baseline. It fails when an existing check changes or is deleted, and when the baseline gains a violation.
+- **Project checks and scripts.** `./check` runs an executable in `checks/` as its own step, and the step fails on the mistake it checks for. A TypeScript file in `scripts/` passes the architecture check, and production code that imports it fails.
+- **Verification skills.** On a fresh Go project and a fresh TypeScript project, I followed each skill's own steps: start, doctor, both feature recipes, and stop. Every step gave the result its feature file names, the evidence survived cleanup, and no server process was left running. The doctor reports a stopped instance as a failure.
+- **Swift.** Only the architecture check ran, which passes.
 
 Not tested:
 
@@ -279,8 +293,8 @@ Not tested:
 
 - **The Swift template after 2026-10-15.** Its tests, rewritten again on 2026-10-22 to run against the real file store, and `FailingNoteStore` have not been compiled. Run `./check` on macOS before relying on them.
 
-- **Claude Code in a real session.** Nobody has watched it load the Stop hook, the skills, the subagent, or the path-scoped rule. The formats follow the Claude Code documentation as of 2026-10-14.
-- **GitHub.** The GitHub Actions workflows were not run, and `CODEOWNERS` enforcement was not tried.
+- **Claude Code in a real session.** Nobody has watched it load the Stop hook, the skills, the path-scoped rule, or `pstack@cursor-plugins` from the template's settings. The formats follow the Claude Code documentation as of 2026-10-14.
+- **GitHub.** The GitHub Actions workflows were not run, and `CODEOWNERS` enforcement was not tried, including the lines without an owner that free the verification skills.
 - **The Xcode app.** The project steps for Swift and an iOS build of the app.
 - **Larger code.** Adoption in a real, larger codebase, and the check's speed on a large repository.
 - **pstack in a kit project.** Nobody has run pstack's playbooks in a kit project, and its autopilot playbooks have not been tried here.

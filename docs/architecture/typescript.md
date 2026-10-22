@@ -70,10 +70,10 @@ Schema files and migrations belong to the adapter that owns the storage. Never e
 
 ## Lint
 
-The linter runs type-aware rules, which need type information from the compiler. Pick a linter that supports the project's TypeScript version: the templates use oxlint with oxlint-tsgolint, which is built on TypeScript 7, because typescript-eslint supports only TypeScript below 6.1. `docs/architecture/stack.md` names the linter and its settings file. Whatever the linter, these rules hold:
+The linter runs type-aware rules, which need type information from the compiler. Pick a linter that supports the project's TypeScript version. The templates use oxlint with oxlint-tsgolint, which is built on TypeScript 7, because typescript-eslint supports only TypeScript below 6.1. `docs/architecture/stack.md` names the linter and its settings file. Whatever the linter, these rules hold:
 
 - **No type assertions in production code.** A branded value comes from a type guard that checks it. Tests and test support may assert, for example on parsed response JSON.
-- **No `any` flowing into typed values.** The result of `JSON.parse` or `response.json()` is `any`. Production code parses it with a parse function or a schema; tests may assert its type.
+- **No `any` flowing into typed values.** The result of `JSON.parse` or `response.json()` is `any`. Production code parses it with a parse function or a schema. Tests may assert its type.
 - **Every promise is awaited or handled.** A stub that only returns a value is written as `() => Promise.resolve(value)` or `() => Promise.reject(error)`, not as an `async` function without `await`.
 - **Generated code is not linted.** Exclude a generated file, such as an API client, in the linter's settings, and regenerate it instead of editing it.
 - **Fix a lint finding instead of silencing it.** A disable comment needs the owner's approval, like a change to the linter's settings.
@@ -91,7 +91,7 @@ TypeScript 7.0's npm package holds the compiler but no JavaScript API: `import t
 
 ## Several apps in one repository
 
-A pnpm workspace holds the apps and the shared domain. `docs/ARCHITECTURE.md` gives the rules; this is how they look in TypeScript.
+A pnpm workspace holds the apps and the shared domain. `docs/ARCHITECTURE.md` gives the rules, and this section shows how they look in TypeScript.
 
 ```
 packages/domain/src/             shared domain: model, parse functions, pure rules, Result; index.ts is its entry
@@ -105,7 +105,7 @@ apps/web/src/adapters/api/       the generated API client and the adapter that p
 ```
 
 - **One `architecture.json` at the root** maps the modules of every app. Each module of an app has an `"app"` field, and the shared domain has none. An import between apps fails as `app`.
-- **The shared domain is a workspace package**, such as `@acme/domain`, whose `exports` field points at `src/index.ts`. Apps import it by name, and `typescript.aliases` in `architecture.json` maps the name to its directory, so the check sees the import. Its `tsconfig.json` sets `"types": []`, so code that needs Node does not compile there. Its tests import their runner by name, such as `import { test } from 'vitest'`, which needs no Node types; with `node:test`, a second `tsconfig.test.json` loads Node's types for the test files only. It holds `Result` too, since it may not import an app's utilities.
+- **The shared domain is a workspace package**, such as `@acme/domain`, whose `exports` field points at `src/index.ts`. Apps import it by name, and `typescript.aliases` in `architecture.json` maps the name to its directory, so the check sees the import. Its `tsconfig.json` sets `"types": []`, so code that needs Node does not compile there. Its tests import their runner by name, such as `import { test } from 'vitest'`, which needs no Node types. With `node:test`, a second `tsconfig.test.json` loads Node's types for the test files only. It holds `Result` too, since it may not import an app's utilities.
 - **Kinds differ per app where the libraries differ.** An app whose UI uses other libraries gets kinds of its own, such as `web-ui` and `web-composition` next to `ui` and `composition`. Kinds without libraries, such as `domain` and `usecases`, are shared by every app. Every kind whose modules use the shared rules lists `shared-domain` in `mayImport`.
 - **A slice's UI has a public entry.** `"publicEntry": ["index.ts"]` on the UI kind makes every other module, screens and the composition root included, import the slice's UI from `ui/index.ts`. The check reports any import that reaches past it.
 - **UI components get their use cases from the slice.** The slice's UI exports a provider, such as `NotesProvider`, that the composition root fills with the slice's use cases. Components read them from it, so a screen can place a component without knowing its use cases.
@@ -131,7 +131,7 @@ apps/web/src/adapters/api/       the generated API client and the adapter that p
   }]
   ```
 
-  `react/rules-of-hooks` is not in oxlint's correctness category. Turn it on in an override for the React app's files only, such as `apps/web/src/**/*.{ts,tsx}`: in other apps, a function named like `useCases` is not a hook.
+  `react/rules-of-hooks` is not in oxlint's correctness category. Turn it on in an override for the React app's files only, such as `apps/web/src/**/*.{ts,tsx}`. In other apps, a function named like `useCases` is not a hook.
 
 - **The client generator gets its own package when it needs an older TypeScript,** as openapi-typescript does. A package such as `packages/api-types` depends on the generator and on the TypeScript version it asks for, and writes the client into the app's `adapters/api/`. `./check` runs the generator from that package.
 - **The contract lives with the API.** A composition file, such as `openapi.ts`, prints the OpenAPI document from the routes, and the API commits it as `openapi.json`. Add it to the composition kind's `allowedFiles`. It builds the app with ports whose methods reject, because printing the document calls none of them, so it needs no database. The web app generates its client types from it into `adapters/api/`. `./check` regenerates both and fails when either differs from the committed file.
@@ -147,7 +147,7 @@ apps/web/src/adapters/api/       the generated API client and the adapter that p
 3. Map every app in `architecture.json`, as in the example below. Test files and configuration files now sit below the root, so their patterns need `**/` or the app's directory.
 4. Change `.github/CODEOWNERS`: settings files anywhere, such as `**/tsconfig*.json` and `**/vite.config.*`, and the contract `/apps/api/openapi.json`. Change the `paths` in `.claude/rules/architecture.md` to `apps/**/src/**` and `packages/**/src/**`, and the `include` of each package's `tsconfig.json` to cover `scripts` and `checks` where the package has them.
 5. Add the contract step to `./check`, run the type checks and tests of every package (`pnpm --recursive run typecheck`), and build each client.
-6. Describe the workspace in `docs/architecture/stack.md`. pnpm 10 and later run no install script of a dependency unless `allowBuilds` in `pnpm-workspace.yaml` allows it, and may refuse a version released in the last day; note what the project allows and why.
+6. Describe the workspace in `docs/architecture/stack.md`. pnpm 10 and later run no install script of a dependency unless `allowBuilds` in `pnpm-workspace.yaml` allows it, and may refuse a version released in the last day. Note what the project allows and why.
 
 ```jsonc
 {
