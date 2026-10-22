@@ -31,7 +31,7 @@ Node runs the TypeScript files directly by stripping types, and `tsc --noEmit` c
 
 ## Domain
 
-- **Model.** Interfaces with `readonly` fields, and branded types for values with rules, like `NoteTitle`. A type guard that checks every rule, like `isNoteTitle`, is the only way to get a branded value, and the parse function, like `parseNoteTitle`, uses it to return an error case for each rule. The linter rejects type assertions in production code, so no code can create a branded value without its check. `as const` is not a type assertion and is allowed everywhere.
+- **Model.** Interfaces with `readonly` fields, and branded types for values with rules, like `NoteTitle`. One private function, like `brokenTitleRule`, holds the rules and names the first one a value breaks. The type guard, like `isNoteTitle`, uses it and is the only way to get a branded value. The parse function, like `parseNoteTitle`, uses both and returns the broken rule as its error case. The linter rejects type assertions in production code, so no code can create a branded value without its check. `as const` is not a type assertion and is allowed everywhere.
 - **Ids.** A plain `string` while a slice has one kind of id. Brand ids, like `NoteId`, once two kinds of id could be passed for each other.
 - **Results.** Expected failures are a `Result` from utilities, with a union of error cases, like `NoteTitleError`. Throw only for unexpected failures.
 - **Rules.** Plain functions, like `newestFirst`.
@@ -74,7 +74,7 @@ The linter runs type-aware rules, which need type information from the compiler.
 
 - **No type assertions in production code.** A branded value comes from a type guard that checks it. Tests and test support may assert, for example on parsed response JSON.
 - **No `any` flowing into typed values.** The result of `JSON.parse` or `response.json()` is `any`. Production code parses it with a parse function or a schema. Tests may assert its type.
-- **Every promise is awaited or handled.** A stub that only returns a value is written as `() => Promise.resolve(value)` or `() => Promise.reject(error)`, not as an `async` function without `await`.
+- **Every promise is awaited or handled.** A test double that only returns a value is written as `() => Promise.resolve(value)` or `() => Promise.reject(error)`, not as an `async` function without `await`.
 - **Generated code is not linted.** Exclude a generated file, such as an API client, in the linter's settings, and regenerate it instead of editing it.
 - **Fix a lint finding instead of silencing it.** A disable comment needs the owner's approval, like a change to the linter's settings.
 
@@ -145,7 +145,7 @@ apps/web/src/adapters/api/       the generated API client and the adapter that p
 1. Move `src/` and the app's `package.json` and `tsconfig.json` into `apps/api/`. Add `pnpm-workspace.yaml` with `apps/*` and `packages/*`, a root `package.json` for the tools that run on every package, such as the linter and TypeScript, and a `tsconfig.base.json` that each package extends.
 2. Create `packages/domain` for the rules that more than one app needs, and move them there from the API's domain. Rewrite their imports to the package name.
 3. Map every app in `architecture.json`, as in the example below. Test files and configuration files now sit below the root, so their patterns need `**/` or the app's directory.
-4. Change `.github/CODEOWNERS`: settings files anywhere, such as `**/tsconfig*.json` and `**/vite.config.*`, and the contract `/apps/api/openapi.json`. Change the `paths` in `.claude/rules/architecture.md` to `apps/**/src/**` and `packages/**/src/**`, and the `include` of each package's `tsconfig.json` to cover `scripts` and `checks` where the package has them.
+4. Change `.github/CODEOWNERS`: settings files anywhere, such as `**/package.json`, `**/tsconfig*.json`, and `**/vite.config.*`, the lockfile `/pnpm-lock.yaml`, and the contract `/apps/api/openapi.json`. Change the `paths` in `.claude/rules/architecture.md` to `apps/**/src/**` and `packages/**/src/**`, and the `include` of each package's `tsconfig.json` to cover `scripts` and `checks` where the package has them.
 5. Add the contract step to `./check`, run the type checks and tests of every package (`pnpm --recursive run typecheck`), and build each client.
 6. Describe the workspace in `docs/architecture/stack.md`. pnpm 10 and later run no install script of a dependency unless `allowBuilds` in `pnpm-workspace.yaml` allows it, and may refuse a version released in the last day. Note what the project allows and why.
 

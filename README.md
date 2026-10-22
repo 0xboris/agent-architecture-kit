@@ -33,7 +33,7 @@ Each project receives:
 - **Code owners.** `.github/CODEOWNERS` covers the gate files, which define the checks.
 - **CI.** `.github/workflows/check.yml` runs `./check` and, on every pull request, the gate guard. The guard fails when the baseline rises or an existing project check changes or goes away.
 - **A verification skill, for Go and TypeScript.** `.claude/skills/verify-<name>/` starts the service on a temporary data directory, sends requests to it, and keeps each request and response as evidence. Its feature map covers the Notes slice and grows with the project. For Swift, generate one with `/pstack:create-verification-skill` once the Xcode project exists.
-- **The Notes reference slice.** A small working feature with a domain rule, a port, middleware, a slice, an adapter, tests that run against the real file store in a temporary directory, a file that pins the stored format, and a composition test.
+- **The Notes reference slice.** A small working feature with a domain rule, a port, middleware, a slice, an adapter, tests that run against the real file store in a temporary directory, a committed sample of the stored format with a test that loads it, and a composition test.
 
 ## Requirements
 
@@ -98,12 +98,12 @@ The language guides describe the template layout. In a project with a different 
 
 The Stop hook runs `./check` with the PATH of the Claude Code session, so the session needs the project's toolchain, such as Node 24 and the package manager, on its PATH.
 
-Agents read `AGENTS.md` at the start of each task and the architecture docs when they touch code. They copy the structure of the reference slice, using the `new-slice` and `new-port` checklists, run `./check` after each step, and cannot finish a task while the check fails. Every review, including the reviewers of `/pstack:interrogate`, answers the questions in `docs/architecture/review.md` for the judgment calls the check cannot make.
+Agents read `AGENTS.md` at the start of each task and the architecture docs when they touch code. They copy the structure of the reference slice, using the `new-slice` and `new-port` checklists, run `./check` after each step, and cannot finish a task while the check fails. Every review answers the questions in `docs/architecture/review.md` for the judgment calls the check cannot make. When an agent runs `/pstack:interrogate`, it adds that file to the rubric the reviewers get.
 
 Your review stays small:
 
 - **Diffs to gate files.** `CODEOWNERS` sends you every change to `architecture.json`, `check`, `tools/`, `.claude/`, `.github/`, the instruction files, and the compiler, linter, and test runner settings. An agent that weakens a check shows up here. Changes that only tighten a check need no review: a lower baseline, a new project check in `checks/`, and a verification skill.
-- **New ports, stored formats, and wire contracts.** The first version of a format is the one old data will be in. A test that loads a committed file in each stored format catches a renamed field, but not a format that was wrong from the start.
+- **New ports, stored formats, and wire contracts.** The first version of a format is the one old data will be in. A test that loads a committed sample of each stored format catches a renamed field, but not a format that was wrong from the start.
 
 The composition root needs no owner. The architecture check limits it to its files, to wiring without control flow, and to a line limit.
 
@@ -128,11 +128,11 @@ TypeScript projects created before 2026-10-19 have no linter. To add it:
 
 [pstack](https://github.com/cursor/plugins/tree/main/pstack) decides how an agent works: which playbook it follows, which subagents it spawns, how it proves its work, and how it reviews and lands pull requests. The kit decides where code goes, and fails the check when code goes elsewhere. The kit follows pstack's principles, so an agent reads one set of rules:
 
-- **Layers.** Each layer of the architecture states a reason that pstack's own rules accept, so Minimize Reader Load and the design red flags keep it. A wrapper without such a reason has none, and the docs say to leave it out.
-- **Tests.** Tests run against real adapters wherever those run locally, and test doubles only make a port fail or stand in for time, ids, and remote services. That is what pstack's TypeScript rules and Test Behavior, Not Implementation ask.
+- **Layers.** Each layer of the architecture states its reason, and the docs say to leave out a wrapper that has none. Here the kit departs from pstack on purpose. Minimize Reader Load would inline a port with one adapter and a use case with one caller. The kit keeps both, because the port keeps outside types and I/O out of the domain and the use case is the one way from UI to the ports, and the architecture check enforces both. `docs/architecture/review.md` gives reviewers that reason.
+- **Tests.** Tests run against real adapters wherever those run locally, and test doubles only make a port fail or stand in for time, ids, and remote services. pstack's TypeScript rules and Test Behavior, Not Implementation ask for this.
 - **Proof.** A change is done when the verification skill shows it working in the running app, not when it compiles.
-- **Gates.** The gates hold only what loosens a check. `/pstack:correct`, Build the Lever, and the verification skills tighten the repository without waiting for you.
-- **Review.** Every review answers `docs/architecture/review.md`, including the reviewers of `/pstack:interrogate`, and `AGENTS.md` keeps the rule table that `/pstack:correct` maintains.
+- **Gates.** A new check in `checks/`, a lower baseline, a committed script, and a verification skill need no owner, so most of what `/pstack:correct` and Build the Lever produce doesn't wait for you. A new lint rule and a new row in the rule table still do, because the same files can also loosen a check.
+- **Review.** Every review answers `docs/architecture/review.md`. `AGENTS.md` tells agents to add it to the rubric of `/pstack:interrogate`, and keeps the rule table that `/pstack:correct` maintains.
 
 Projects use upstream pstack, unchanged. The template's `.claude/settings.json` enables it for everyone who works on the project:
 
@@ -143,7 +143,7 @@ Projects use upstream pstack, unchanged. The template's `.claude/settings.json` 
 "enabledPlugins": {"pstack@cursor-plugins": true}
 ```
 
-Claude Code registers the marketplace after a contributor accepts the workspace trust dialog. Cloud sessions show no such dialog, so install the plugin there with `/plugin marketplace add cursor/plugins` and `/plugin install pstack@cursor-plugins`. Run `/pstack:setup-pstack` once to pick the models, then type `/pstack:poteto-mode` before a task that needs rigor. pstack's own adapter maps its Cursor names to Claude Code, and skips steps that need a Cursor-only feature, such as Bugbot.
+Claude Code registers the marketplace after a contributor accepts the workspace trust dialog. Cloud sessions show no such dialog, so install the plugin there with `/plugin marketplace add cursor/plugins` and `/plugin install pstack@cursor-plugins`. Run `/pstack:setup-pstack` once to pick the models, then type `/pstack:poteto-mode` before a task that needs rigor. pstack's own adapter maps its Cursor names to Claude Code, and skips steps that need a Cursor-only feature, such as Bugbot. pstack also calls `/deslop` and the `control-ui` and `control-cli` skills from Cursor's cursor-team-kit, which the marketplace does not offer to Claude Code. Ask for the same cleanup in plain words, as pstack's guide says, and drive the app with the verification skill.
 
 The architecture holds in a pstack session for these reasons:
 
@@ -151,7 +151,7 @@ The architecture holds in a pstack session for these reasons:
 - **The gates.** Branch protection and `CODEOWNERS` hold every change to a gate file on main for your review. pstack's autopilot playbooks merge pull requests on their own, but never give or bypass an approval that GitHub enforces. This works only when agents open pull requests under their own account, as described under "Start a new project".
 - **The verification skill.** pstack's playbooks prove each change in the running app, and the verification skill is how they drive it in a kit project.
 
-The Stop hook runs only when the main session finishes. pstack's Opening a PR playbook gives each subagent that writes code its own git worktree, so the main checkout holds only the main session's changes, and CI checks the subagents' pull requests. A subagent that edits the main checkout instead can leave unfinished work that the hook reports.
+The Stop hook runs only when the main session finishes. pstack's subagents inherit the worktree of the session that spawns them, so the hook checks their combined work, and they run `./check` themselves because `AGENTS.md` tells them to. If the main session ends a turn while subagents still edit files, the hook can report failures in their unfinished work.
 
 ### Upgrade a project created before 2026-10-22
 
@@ -159,11 +159,11 @@ The Stop hook runs only when the main session finishes. pstack's Opening a PR pl
 2. In `architecture.json`, add `"scriptFiles": ["scripts/**", "checks/**"]`. Add `portFiles`, and `"forbidPorts": true` on each UI kind, if the project has neither yet. Add `.scratch/` and `.verify/` to `.gitignore`.
 3. In TypeScript, add `scripts` and `checks` to the `include` of `tsconfig.json` and to the files of the type-assertion rule in the linter settings. Remove the domain from that rule's excluded files, and replace each type assertion in the domain with a type guard, like `isNoteTitle`.
 4. Add the loop over `checks/` to `./check`, and make the gate guard step in `.github/workflows/check.yml` run on every pull request, as in the language template.
-5. Replace `.github/CODEOWNERS` with the template's, so that the composition root, the dependency files, the baseline, and the verification skills need no owner.
+5. Replace `.github/CODEOWNERS` with the template's, so that the composition root, the baseline, and the verification skills need no owner.
 6. Replace `AGENTS.md` and `CLAUDE.md` with the template's. Keep the project's reference slice and its own rows in the rule table. Delete `.claude/agents/architecture-reviewer.md`.
 7. In `.claude/settings.json`, replace the lines for `pstack@agent-architecture-kit` with the template's lines for `pstack@cursor-plugins`.
 8. Run `/pstack:create-verification-skill`, or copy the template's verification skill and change its launch line.
-9. Rewrite the reference slice's tests to run against the real adapter, as the template's do. Add a committed file in each stored format, with a test that loads it.
+9. Rewrite the reference slice's tests to run against the real adapter, as the template's do. Commit a sample of each stored format, with a test that loads it.
 
 Run `./check` after each step.
 
@@ -286,6 +286,13 @@ Retested on Linux on 2026-10-22 with Python 3.13, Node 22.22, TypeScript 7.0.2, 
 - **Project checks and scripts.** `./check` runs an executable in `checks/` as its own step, and the step fails on the mistake it checks for. A TypeScript file in `scripts/` passes the architecture check, and production code that imports it fails.
 - **Verification skills.** On a fresh Go project and a fresh TypeScript project, I followed each skill's own steps: start, doctor, both feature recipes, and stop. Every step gave the result its feature file names, the evidence survived cleanup, and no server process was left running. The doctor reports a stopped instance as a failure.
 - **Swift.** Only the architecture check ran, which passes.
+
+Retested the same day, after an independent review found holes in the gate guard and the scripts:
+
+- **Gate guard.** It fails on a changed check with a non-ASCII name, on a check that lost its executable bit, and on a baseline that comes back with a violation after a pull request deleted it. It reads a baseline with comments. A pull request that loosens a check and also changes `AGENTS.md` passes, because that file sends it to the owner.
+- **Project checks.** A non-executable helper file and a folder in `checks/` are skipped, and `./check` passes.
+- **Verification skill.** In a project inside a larger git repository, the run directory lands in the project. A second `stop` does nothing.
+- **Code owners.** A new TypeScript project's `CODEOWNERS` owns `package.json` and `package-lock.json` again, so an install script can't switch off `./check` without your review.
 
 Not tested:
 

@@ -29,9 +29,9 @@ step format gofmt_clean
 step vet go vet ./...
 step test go test -race -shuffle=on -timeout=60s ./...
 
-# Project checks: each executable in checks/ is one step. Agents add them. Only the owner changes or removes them.
+# Each executable file in checks/ is one step. Other files and folders there are helpers.
 for project_check in checks/*; do
-  case "$project_check" in *.md|"checks/*") continue ;; esac
+  [ -f "$project_check" ] && [ -x "$project_check" ] || continue
   step "$(basename "$project_check")" "./$project_check"
 done
 

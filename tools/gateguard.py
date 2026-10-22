@@ -1,41 +1,111 @@
 #!/usr/bin/env python3
-"""Fails when a pull request loosens a check that needs no owner.
+"""Fails when a pull request loosens a check without the owner's review.
 
 .github/CODEOWNERS sends changes to the files that define the checks to the
-owner. Two kinds of change can only tighten a check, so they need no owner,
-and this guard keeps them that way:
+owner. Two kinds of change can only tighten a check, so they need no owner:
+a lower architecture-baseline.json, and a new check in checks/. This guard
+fails a pull request that goes the other way:
 
-- architecture-baseline.json may lose entries and lower counts, never gain them.
-- checks/ may gain new checks. Changing or deleting one can loosen it.
+- architecture-baseline.json gains an entry or a higher count, including
+  when it comes back after a pull request deleted it.
+- an existing file in checks/ changes, loses its executable bit, or goes away.
+
+Such a pull request passes only when it also changes a file that the base
+branch's CODEOWNERS gives an owner, because then the owner reviews it.
 
 Usage:
   python3 tools/gateguard.py BASE     compare HEAD with BASE, such as HEAD^1 in CI
 
-Exit codes: 0 nothing loosened, 1 something loosened, 2 configuration error.
-Needs Python 3.9 or later, Git, and nothing else.
+Exit codes: 0 nothing loosened, or the owner reviews it. 1 loosened without
+the owner. 2 configuration error. Needs Python 3.9 or later, Git, and nothing else.
 """
 
-import json
+import os
+import re
 import subprocess
 import sys
 
+sys.dont_write_bytecode = True  # importing archcheck must not leave __pycache__ in tools/
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from archcheck import ConfigError, parse_json_with_comments  # noqa: E402
+
 BASELINE = "architecture-baseline.json"
 CHECKS = "checks/"
+CODEOWNERS = ".github/CODEOWNERS"
 
 
 def git(root, *args):
     return subprocess.run(["git", *args], cwd=root, capture_output=True, text=True)
 
 
-def baseline_at(root, revision):
-    shown = git(root, "show", f"{revision}:{BASELINE}")
-    if shown.returncode != 0:
-        return None
-    return json.loads(shown.stdout)
+def file_at(root, revision, path):
+    shown = git(root, "show", f"{revision}:{path}")
+    return shown.stdout if shown.returncode == 0 else None
 
 
-def raised_entries(old, new):
-    return sorted(f"{key}: {old.get(key, 0)} -> {count}" for key, count in new.items() if count > old.get(key, 0))
+def changed_files(root, base):
+    """(status, path) pairs. -z keeps paths with unusual characters unquoted."""
+    diff = git(root, "diff", "-z", "--name-status", "--no-renames", base, "HEAD")
+    if diff.returncode != 0:
+        raise ConfigError(f"git diff against '{base}' failed: {diff.stderr.strip()}")
+    fields = diff.stdout.split("\0")
+    return list(zip(fields[0::2], fields[1::2]))
+
+
+def baseline_raises(root, base):
+    new_text = file_at(root, "HEAD", BASELINE)
+    if new_text is None:
+        return []
+    old_text = file_at(root, base, BASELINE)
+    if old_text is None and file_at(root, base, "tools/gateguard.py") is None:
+        return []
+    old = parse_json_with_comments(old_text, f"{base}:{BASELINE}") if old_text is not None else {}
+    new = parse_json_with_comments(new_text, BASELINE)
+    return [f"raises the baseline ({key}: {old.get(key, 0)} -> {count})"
+            for key, count in sorted(new.items()) if count > old.get(key, 0)]
+
+
+def owner_rules(text):
+    """CODEOWNERS lines as (regex, has_owner). The last matching line decides, as on GitHub."""
+    rules = []
+    for line in text.splitlines():
+        fields = line.split("#", 1)[0].split()
+        if fields:
+            rules.append((pattern_regex(fields[0]), len(fields) > 1))
+    return rules
+
+
+def pattern_regex(pattern):
+    anchored = pattern.startswith("/") or "/" in pattern.rstrip("/")
+    directory = pattern.endswith("/")
+    body, i, text = [], 0, pattern.strip("/")
+    while i < len(text):
+        if text.startswith("**/", i):
+            body.append("(?:.*/)?")
+            i += 3
+        elif text.startswith("**", i):
+            body.append(".*")
+            i += 2
+        elif text[i] == "*":
+            body.append("[^/]*")
+            i += 1
+        elif text[i] == "?":
+            body.append("[^/]")
+            i += 1
+        else:
+            body.append(re.escape(text[i]))
+            i += 1
+    start = "^" if anchored else "^(?:.*/)?"
+    end = "/.*$" if directory else "(?:/.*)?$"
+    return re.compile(start + "".join(body) + end)
+
+
+def is_owned(rules, path):
+    owned = False
+    for regex, has_owner in rules:
+        if regex.match(path):
+            owned = has_owner
+    return owned
 
 
 def main():
@@ -47,37 +117,35 @@ def main():
     if not root:
         print("Gate guard: not inside a Git repository.", file=sys.stderr)
         return 2
-    diff = git(root, "diff", "--name-status", "--no-renames", base, "HEAD")
-    if diff.returncode != 0:
-        print(f"Gate guard: git diff against '{base}' failed: {diff.stderr.strip()}", file=sys.stderr)
+    try:
+        changes = changed_files(root, base)
+        problems = []
+        for status, path in changes:
+            if path.startswith(CHECKS) and status != "A":
+                verb = "deletes" if status == "D" else "changes"
+                problems.append(f"{verb} the existing check {path}")
+            if path == BASELINE:
+                problems += baseline_raises(root, base)
+    except ConfigError as error:
+        print(f"Gate guard: {error}", file=sys.stderr)
         return 2
-
-    problems = []
-    for line in diff.stdout.splitlines():
-        status, path = line.split("\t", 1)
-        if path.startswith(CHECKS) and status != "A":
-            verb = "deletes" if status == "D" else "changes"
-            problems.append(f"{verb} the existing check {path}. Add a new check instead, "
-                            "or ask the owner to change this one.")
-        if path == BASELINE and status != "D":
-            try:
-                old = baseline_at(root, base)
-                new = baseline_at(root, "HEAD")
-            except json.JSONDecodeError as error:
-                print(f"Gate guard: {BASELINE} is not valid JSON: {error}", file=sys.stderr)
-                return 2
-            if old is not None and new is not None:
-                for entry in raised_entries(old, new):
-                    problems.append(f"raises the baseline ({entry}). Fix the violation instead.")
 
     if not problems:
         print("Gate guard passed: no check was loosened.")
         return 0
+    rules = owner_rules(file_at(root, base, CODEOWNERS) or "")
+    gates = [path for _, path in changes if is_owned(rules, path)]
     print(f"Gate guard: this pull request loosens {len(problems)} check{'' if len(problems) == 1 else 's'}.\n")
     for problem in problems:
-        print(f"  It {problem}")
-    print("\nThe baseline may only go down, and checks/ may only gain new checks. "
-          "Changes that loosen a check are the owner's to make.")
+        print(f"  It {problem}.")
+    if gates:
+        print("\nIt also changes gate files, so the owner reviews it:\n")
+        for path in gates:
+            print(f"  {path}")
+        return 0
+    print("\nThe baseline may only go down, and checks/ may only gain new checks. To loosen a check, "
+          "also change a gate file in the same pull request, such as the check's row in the rule table "
+          "of AGENTS.md, so that the owner reviews it. Otherwise fix the violation, or add a new check.")
     return 1
 
 

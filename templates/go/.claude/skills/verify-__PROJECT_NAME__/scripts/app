@@ -12,7 +12,7 @@ Usage, from the repository root:
 EOF
 }
 
-root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)
 runs="$root/.verify"
 
 launch() {
@@ -28,7 +28,7 @@ run_dir() {
 }
 
 alive() {
-  kill -0 "$(cat "$1/pid")" 2> /dev/null
+  [ -f "$1/pid" ] && kill -0 "$(cat "$1/pid")" 2> /dev/null
 }
 
 answers() {
@@ -61,7 +61,7 @@ doctor() {
   local dir
   dir=$(run_dir "$1")
   if ! alive "$dir"; then
-    echo "FAIL the process $(cat "$dir/pid") that run $1 started has exited. Start a new run. Its log is $dir/server.log."
+    echo "FAIL the process that run $1 started is not running. Start a new run. Its log is $dir/server.log."
     return 1
   fi
   if ! answers "$dir"; then
@@ -93,7 +93,7 @@ stop() {
     done
     ! alive "$dir" || kill -9 "$(cat "$dir/pid")"
   fi
-  rm -rf "$dir/data" "$dir/server"
+  rm -rf "$dir/data" "$dir/server" "$dir/pid"
   echo "Stopped run $1. The evidence is in $dir/evidence."
 }
 

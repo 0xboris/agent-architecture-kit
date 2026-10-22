@@ -155,8 +155,8 @@ A passing check does not show that a change works. Before a change is done, driv
 - **Composition tests check the wiring**, such as which middleware a slice receives.
 - **Tests follow behavior.** A test asserts what the code's users can observe: results, errors, state they can read back, and effects outside the process. It fails when that behavior breaks, and it keeps passing when only the internals change. It never asserts which internal part or which port method did the work.
 - **Tests are deterministic.** They use a fake clock and fixed ids, never real time, the network, or unseeded randomness. They pass in any order. A flaky test is a bug.
-- **Stored formats are pinned.** Each stored format has a committed file that an earlier version wrote, and a test that loads it, so a renamed field fails a test instead of old data. A migration that changes existing rows, such as one that adds a required column and fills it, gets a test that runs it on rows written by the previous version.
-- **Verification stays honest.** Every bug fix starts with a failing reproduction, committed before the fix: a test when a cheap one exists, otherwise a script or a recorded run against the running app. Prefer no new test to a test that mostly checks test doubles. No check is made to pass by deleting, skipping, or loosening a test, or by changing a gate file.
+- **Stored formats are pinned.** Each stored format has a committed sample that an earlier version wrote, and a test that loads it, so a renamed field fails a test instead of old data. A migration that changes existing rows, such as one that adds a required column and fills it, gets a test that runs it on rows written by the previous version.
+- **Verification stays honest.** Every bug fix starts with a failing reproduction, committed before the fix. Use a test when a cheap one exists, and otherwise a script or a recorded run against the running app. Prefer no new test to a test that mostly checks test doubles. No check is made to pass by deleting, skipping, or loosening a test, or by changing a gate file.
 
 ## How this is enforced
 
@@ -172,14 +172,14 @@ A passing check does not show that a change works. Before a change is done, driv
 - **The baseline** (`architecture-baseline.json`) records violations that existed before the rules were adopted. The check fails only when a change adds a violation. When code is fixed, lower the baseline in the same change with `python3 tools/archcheck.py --write-baseline`.
 - **Project checks** in `checks/` are executables that `./check` runs, one step each. Add one when a mistake keeps coming back and neither `architecture.json` nor the linter can catch it. Its message names the fix.
 - **Gate files** define the checks: `architecture.json`, `check`, `tools/`, `.claude/`, `.github/`, the instruction files, the architecture docs, and the compiler, linter, and test runner settings. A change to them can loosen a check, so a code-owner rule requires the owner's review. Never change a gate file to make a check pass.
-- **The gate guard** (`tools/gateguard.py`) runs in CI on every pull request. It fails when the baseline gains a violation, or when an existing file in `checks/` changes or goes away. Lowering the baseline and adding a check only tighten the rules, so neither needs the owner.
+- **The gate guard** (`tools/gateguard.py`) runs in CI on every pull request. It fails when the baseline gains a violation, or when an existing file in `checks/` changes or goes away. Lowering the baseline and adding a check only tighten the rules, so neither needs the owner. A pull request that loosens one of them passes only when it also changes a gate file, so that the owner reviews it.
 - **The Stop hook** runs `./check` before an agent finishes a task that changed files.
-- **Review** of every pull request, by people and by agents such as the reviewers of `/pstack:interrogate`, answers the questions in `docs/architecture/review.md`.
+- **Review** of every pull request, by people and by agents, answers the questions in `docs/architecture/review.md`. An agent that runs `/pstack:interrogate` adds that file to the reviewers' rubric.
 - **The rule table** in `AGENTS.md` pairs each rule with what enforces it, so a rule that nothing enforces stands out.
 
 ## Changing code safely
 
-- Work in small steps that each leave the check green. Keep refactoring and behavior changes in separate steps.
+- Work in small steps that each leave the check green. The one exception is a bug fix, whose failing reproduction lands one commit before the fix. Keep refactoring and behavior changes in separate steps.
 - Change an API inside the repository in one step. Move every caller to the new form and delete the old form in the same change, with no compatibility layer.
 - Stored formats, wire contracts, and data on installed clients are the exception, because old data and old clients outlive the change. Change them by expanding first and contracting later, as "Data outlives code" describes.
 - Build what the task needs and no more. Add options, modules, and dependencies when a need exists.

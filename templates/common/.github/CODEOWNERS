@@ -1,4 +1,4 @@
-# Gate files: they define the checks, and a change to them can loosen a check, so the owner reviews it.
+# Gate files define the checks. A change to them can loosen a check, so the owner reviews it.
 /architecture.json            __OWNER__
 /check                        __OWNER__
 /tools/                       __OWNER__
@@ -12,8 +12,8 @@
 # Compiler, linter, and test runner settings.
 __TOOL_CONFIG_LINES__
 
-# These can only tighten a check, so they need no owner. tools/gateguard.py fails a pull request
-# that raises the baseline or changes or deletes an existing check in checks/. A verification
-# skill only adds proof, and the module map is generated.
+# These need no owner. tools/gateguard.py fails a pull request that raises the baseline or changes
+# or deletes an existing check in checks/, unless it also changes a gate file. A verification skill
+# only adds proof, and the module map is generated.
 /.claude/skills/verify-*/
 /docs/architecture/modules.md

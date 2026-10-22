@@ -8,7 +8,7 @@ description: Adds a port and its adapter in the shape of the reference slice. Us
 3. Declare the operations with domain types only. Storage records, wire payloads, and SDK types stay inside the adapter.
 4. Make each operation's results a closed set of cases: a union or enum of outcomes, or a closed set of errors. Callers and their tests then know every case to handle.
 5. Implement the port in an adapter module. Map outside data to domain types inside the adapter.
-6. Test the adapter against the real system: a real database, a temporary directory, or recorded responses from a remote service. Cover each case that the port promises. When the adapter stores data, commit a file in the stored format and a test that loads it.
+6. Test the adapter against the real system: a real database, a temporary directory, or recorded responses from a remote service. Cover each case that the port promises. When the adapter stores data, commit a sample of the stored format and a test that loads it.
 7. In the tests of code that calls the port, use the real adapter when it runs locally and fast. When it is remote, slow, or nondeterministic, or a test needs it to fail, add a small fake or a failing implementation to test support, like the reference slice's failing store.
 8. Add the real implementation to the composition root's live dependencies.
 9. Run `./check`.

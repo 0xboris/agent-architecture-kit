@@ -38,13 +38,15 @@ def fill(text, values):
 
 # ----------------------------------------------------------- init, adopt
 
-# Compiler, linter, and test runner settings, and the package manager's install
-# settings. An agent could weaken a check by changing them, so they are gate files
-# too. Dependencies are not: architecture.json decides where a package may be used.
+# Compiler, linter, and test runner settings, and the package manager's files. An
+# agent could weaken a check by changing them, so they are gate files too. In
+# TypeScript, package.json can run an install script before ./check and pins the
+# versions of the linter and the compiler.
 TOOL_CONFIG_PATHS = {
     "swift": ["/.swiftlint.yml"],
     "go": ["/.golangci.yml", "/.golangci.yaml"],
-    "typescript": ["/tsconfig*.json", "/.oxlintrc.json", "/oxlint.config.*", "/eslint.config.*", "/vitest.config.*", "/pnpm-workspace.yaml", "/.npmrc"],
+    "typescript": ["/package.json", "/package-lock.json", "/pnpm-lock.yaml", "/tsconfig*.json", "/.oxlintrc.json",
+                   "/oxlint.config.*", "/eslint.config.*", "/vitest.config.*", "/pnpm-workspace.yaml", "/.npmrc"],
 }
 
 

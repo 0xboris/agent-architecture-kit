@@ -51,11 +51,15 @@ class ConfigError(Exception):
 
 def load_json_with_comments(path):
     with open(path, encoding="utf-8") as f:
-        lines = [line for line in f if not line.lstrip().startswith("//")]
+        return parse_json_with_comments(f.read(), path)
+
+
+def parse_json_with_comments(text, name):
+    lines = [line for line in text.splitlines(keepends=True) if not line.lstrip().startswith("//")]
     try:
         return json.loads("".join(lines))
     except json.JSONDecodeError as error:
-        raise ConfigError(f"{path} is not valid JSON: {error}")
+        raise ConfigError(f"{name} is not valid JSON: {error}")
 
 
 def glob_to_regex(pattern):
