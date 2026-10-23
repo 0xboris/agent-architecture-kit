@@ -1,5 +1,3 @@
-// Package ui holds the HTTP handlers of the notes slice. It turns requests
-// into use case calls and results into responses.
 package ui
 
 import (
@@ -29,7 +27,6 @@ func (h Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /notes", h.create)
 }
 
-// The wire format. It stays in this package and maps to and from domain types.
 type noteResponse struct {
 	ID        string    `json:"id"`
 	Title     string    `json:"title"`

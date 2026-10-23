@@ -1,17 +1,19 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { temporaryNoteStore } from '../../../adapters/filestore/fileNoteStore.testing.ts';
 import type { NoteStore } from '../../../domain/ports.ts';
 import { createRouter } from '../../../sharedui/http.ts';
-import { FakeClock, RecordingLogger, SequentialIds, sampleNote } from '../../../testsupport/fakes.ts';
+import { FakeClock, RecordingLogger, SequentialIds, failingNoteStore, sampleNote } from '../../../testsupport/fakes.ts';
 import { startTestServer } from '../../../testsupport/http.ts';
-import { CreateNote } from '../usecases/createNote.ts';
-import { ListNotes } from '../usecases/listNotes.ts';
+import { createNote } from '../usecases/createNote.ts';
+import { listNotes } from '../usecases/listNotes.ts';
 import { notesRoutes } from './notesRoutes.ts';
 
 async function withServer(store: NoteStore, run: (url: string) => Promise<void>): Promise<void> {
+  const ports = { store, clock: new FakeClock(), ids: new SequentialIds() };
   const routes = notesRoutes({
-    createNote: new CreateNote({ store, clock: new FakeClock(), ids: new SequentialIds() }),
-    listNotes: new ListNotes({ store }),
+    createNote: (rawTitle) => createNote(ports, rawTitle),
+    listNotes: () => listNotes({ store }),
     logger: new RecordingLogger(),
   });
   const server = await startTestServer(createRouter(routes, () => undefined));
@@ -22,10 +24,9 @@ async function withServer(store: NoteStore, run: (url: string) => Promise<void>)
   }
 }
 
-const emptyStore: NoteStore = { allNotes: () => Promise.resolve([]), save: () => Promise.resolve() };
-
-test('listing notes returns them', async () => {
-  const store: NoteStore = { allNotes: () => Promise.resolve([sampleNote(1)]), save: () => Promise.resolve() };
+test('listing notes returns them', async (t) => {
+  const store = await temporaryNoteStore(t);
+  await store.save(sampleNote(1));
   await withServer(store, async (url) => {
     const response = await fetch(`${url}/notes`);
     assert.equal(response.status, 200);
@@ -34,16 +35,18 @@ test('listing notes returns them', async () => {
   });
 });
 
-test('posting a note returns created', async () => {
-  await withServer(emptyStore, async (url) => {
-    const response = await fetch(`${url}/notes`, { method: 'POST', body: JSON.stringify({ title: 'Groceries' }) });
-    assert.equal(response.status, 201);
-    assert.equal(((await response.json()) as { title: string }).title, 'Groceries');
+test('a posted note is created and listed', async (t) => {
+  await withServer(await temporaryNoteStore(t), async (url) => {
+    const created = await fetch(`${url}/notes`, { method: 'POST', body: JSON.stringify({ title: 'Groceries' }) });
+    assert.equal(created.status, 201);
+    assert.equal(((await created.json()) as { title: string }).title, 'Groceries');
+    const listed = (await (await fetch(`${url}/notes`)).json()) as { title: string }[];
+    assert.deepEqual(listed.map((note) => note.title), ['Groceries']);
   });
 });
 
-test('posting an empty title returns unprocessable', async () => {
-  await withServer(emptyStore, async (url) => {
+test('posting an empty title returns unprocessable', async (t) => {
+  await withServer(await temporaryNoteStore(t), async (url) => {
     const response = await fetch(`${url}/notes`, { method: 'POST', body: JSON.stringify({ title: ' ' }) });
     assert.equal(response.status, 422);
     assert.equal(((await response.json()) as { code: string }).code, 'title_empty');
@@ -51,11 +54,7 @@ test('posting an empty title returns unprocessable', async () => {
 });
 
 test('a failed load returns a server error', async () => {
-  const store: NoteStore = {
-    allNotes: () => Promise.reject(new Error('offline')),
-    save: () => Promise.resolve(),
-  };
-  await withServer(store, async (url) => {
+  await withServer(failingNoteStore(new Error('offline')), async (url) => {
     const response = await fetch(`${url}/notes`);
     assert.equal(response.status, 500);
   });

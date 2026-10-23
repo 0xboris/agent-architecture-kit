@@ -1,6 +1,5 @@
-# Gate files: they define the checks, so changes need the owner's review.
+# Gate files define the checks. A change to them can loosen a check, so the owner reviews it.
 /architecture.json            __OWNER__
-/architecture-baseline.json   __OWNER__
 /check                        __OWNER__
 /tools/                       __OWNER__
 /.claude/                     __OWNER__
@@ -13,8 +12,11 @@
 # Compiler, linter, and test runner settings.
 __TOOL_CONFIG_LINES__
 
-# The module map is generated, so it needs no owner.
+# The baseline, checks/, GLOSSARY.md, and the source files need no owner. tools/gateguard.py fails a
+# pull request that loosens a check through them, such as by raising the baseline or adding a
+# suppression comment, unless it records an exception in AGENTS.md. The module map is generated.
 /docs/architecture/modules.md
 
-# The composition root: legitimate changes are a few lines of wiring, so they are cheap to review.
+# The composition root decides which middleware each slice receives, such as authentication.
+# Its changes are a few lines of wiring, so they are cheap to review.
 __COMPOSITION_LINES__

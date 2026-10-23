@@ -1,9 +1,6 @@
 import type { Result } from '../utilities/result.ts';
 
-declare const noteTitleBrand: unique symbol;
-
-/** A title that follows the title rules. Only parseNoteTitle creates one. */
-export type NoteTitle = string & { readonly [noteTitleBrand]: true };
+export type NoteTitle = string & { readonly __brand: 'NoteTitle' };
 
 export const maxTitleLength = 200;
 
@@ -15,10 +12,21 @@ export interface Note {
   readonly createdAt: Date;
 }
 
+function brokenTitleRule(trimmed: string): NoteTitleError | undefined {
+  if (trimmed === '') return 'empty';
+  // Count code points. string.length counts UTF-16 units, so most emoji would count twice.
+  if (Array.from(trimmed).length > maxTitleLength) return 'tooLong';
+  return undefined;
+}
+
+export function isNoteTitle(value: string): value is NoteTitle {
+  return value === value.trim() && brokenTitleRule(value) === undefined;
+}
+
 export function parseNoteTitle(raw: string): Result<NoteTitle, NoteTitleError> {
   const trimmed = raw.trim();
-  if (trimmed === '') return { ok: false, error: 'empty' };
-  // Array.from counts code points, so an emoji counts as one character, as in the Go template.
-  if (Array.from(trimmed).length > maxTitleLength) return { ok: false, error: 'tooLong' };
-  return { ok: true, value: trimmed as NoteTitle };
+  if (isNoteTitle(trimmed)) return { ok: true, value: trimmed };
+  const broken = brokenTitleRule(trimmed);
+  if (broken === undefined) throw new Error('isNoteTitle rejected a title that breaks no rule.');
+  return { ok: false, error: broken };
 }

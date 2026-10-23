@@ -1,5 +1,3 @@
-// Package domain holds the business model, the rules, and the ports.
-// It performs no I/O.
 package domain
 
 import (

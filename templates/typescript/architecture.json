@@ -1,10 +1,11 @@
 // The module map and the import rules that tools/archcheck.py enforces.
-// docs/ARCHITECTURE.md explains the kinds. This is a gate file: change it
-// on purpose, in its own commit, with the owner's approval.
+// docs/ARCHITECTURE.md explains the kinds. This is a gate file, so a change
+// to it goes into its own pull request, which the owner reviews.
 {
   "language": "typescript",
   "sourceRoots": ["."],
   "testFiles": ["**/*.test.ts", "**/*.testing.ts"],
+  "scriptFiles": ["scripts/**", "checks/**"],
   "ignore": ["*.config.ts", "*.config.js", "*.config.mjs"],
   "glossary": "GLOSSARY.md",
   "portFiles": ["src/domain/ports.ts"],
@@ -30,27 +31,29 @@
     "usecases": {
       "mayImport": ["domain", "utilities"],
       "external": {"allow": []},
-      "forbiddenCalls": ["@io"]
+      "forbiddenCalls": ["@io", "@brand"]
     },
     "ui": {
       "mayImport": ["usecases@same-slice", "domain", "shared-ui", "utilities"],
       "forbidPorts": true,
       "external": {"allow": ["node:http"]},
-      "forbiddenCalls": ["@io"]
+      "forbiddenCalls": ["@io", "@brand"]
     },
     "shared-ui": {
       "mayImport": ["utilities"],
       "external": {"allow": ["node:http"]},
-      "forbiddenCalls": ["@io"],
+      "forbiddenCalls": ["@io", "@brand"],
       "bannedTerms": "glossary"
     },
     "adapter": {
       "mayImport": ["domain", "utilities"],
-      "external": {"allow": ["*"]}
+      "external": {"allow": ["*"]},
+      "forbiddenCalls": ["@brand"]
     },
     "composition": {
       "mayImport": ["*"],
       "external": {"allow": ["node:http", "node:path"]},
+      "forbiddenCalls": ["@brand"],
       "composition": {
         "allowedFiles": ["main.ts", "container.ts", "config.ts", "live.ts", "wire-*.ts"],
         "controlFlowAllowedIn": ["config.ts"],
@@ -60,12 +63,13 @@
     "utilities": {
       "mayImport": [],
       "external": {"allow": []},
-      "forbiddenCalls": ["@io"],
+      "forbiddenCalls": ["@io", "@brand"],
       "bannedTerms": "glossary"
     },
     "test-support": {
       "mayImport": ["domain", "utilities"],
-      "external": {"allow": ["node:test", "node:assert", "node:assert/strict", "node:http", "node:net"]}
+      "external": {"allow": ["node:test", "node:assert", "node:assert/strict", "node:http", "node:net"]},
+      "forbiddenCalls": ["@brand"]
     }
   },
 
@@ -77,6 +81,9 @@
       {"pattern": "\\b(setTimeout|setInterval)\\(", "fix": "Wait through a port that tests can control."},
       {"pattern": "\\bfetch\\(|\\blocalStorage\\b|\\bsessionStorage\\b", "fix": "This is I/O. Declare a port in the domain and implement it in an adapter."},
       {"pattern": "\\bconsole\\.(log|info|warn|error|debug)\\(", "fix": "Log through the Logger interface from utilities."}
+    ],
+    "brand": [
+      {"pattern": "\\b__brand\\b", "fix": "Create a branded value with the domain's parse function or type guard. Only the domain declares brands."}
     ]
   }
 }

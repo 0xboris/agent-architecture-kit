@@ -1,5 +1,3 @@
-// Package middleware holds decorators for the ports. The composition root
-// applies them: mandatory ones once to the real adapter, optional ones per slice.
 package middleware
 
 import (
@@ -9,7 +7,6 @@ import (
 	"__GO_MODULE__/internal/utilities"
 )
 
-// LoggingNoteStore logs each save. It is mandatory middleware.
 type LoggingNoteStore struct {
 	base   domain.NoteStore
 	logger utilities.Logger

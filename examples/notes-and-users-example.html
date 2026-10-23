@@ -138,7 +138,7 @@
 <main>
   <header>
     <h1>Notes and users example</h1>
-    <p class="muted">A users slice is added to both apps. Notes now have an author, and only the author can change a note's title. The two slices never import each other. They meet in five places, marked in orange below.</p>
+    <p class="muted">Both apps gain a users slice. Notes now have an author, and only the author can change a note's title. The two slices never import each other. They meet in five places, marked in orange below.</p>
     <div class="status" aria-label="Check result">
       <span class="pill">architecture ok</span><span class="pill">contract ok</span><span class="pill">lint ok</span><span class="pill">typecheck ok</span><span class="pill">164 tests ok</span><span class="pill">build ok</span>
     </div>
@@ -383,7 +383,7 @@ export function NotesScreen() {
 
   <section>
     <h2>One rule, checked three times</h2>
-    <p>The rule "only the author may edit" is <code>canEdit</code> in the shared domain. The web app uses it twice to avoid asking for an edit the API would refuse. The API has the last word.</p>
+    <p>The rule "only the author may edit" is <code>canEdit</code> in the shared domain. The web app uses it twice to avoid asking for an edit the API would refuse. The API checks the rule too, and its answer decides.</p>
     <figure class="wide">
       <div class="scroll">
         <svg viewBox="0 0 1000 230" role="img" aria-label="An edit passes through NoteDetail, the web EditNote use case, the HTTP adapter and the API EditNote use case. Three of them call canEdit from the shared domain.">
@@ -438,11 +438,11 @@ export function NotesScreen() {
     <h2>What I noticed</h2>
     <div class="cols">
       <div>
-        <h3>Holds up</h3>
+        <h3>What works</h3>
         <ul>
           <li>The slices stay apart in every layer of both apps, and the check enforces it.</li>
           <li>Each screen is the only place that joins slice UI. The notes UI takes an id and a render function, not a user, so it would work with any author display.</li>
-          <li>Rules shared by both apps live once: <code>parseUserName</code>, <code>usersByName</code> and <code>canEdit</code> are in <code>packages/domain</code>.</li>
+          <li>Rules that both apps use exist once. <code>parseUserName</code>, <code>usersByName</code> and <code>canEdit</code> are in <code>packages/domain</code>.</li>
           <li>The migration adds a user only when old notes exist and assigns them to it, so a filled database migrates without errors. It has its own test.</li>
           <li>The glossary names User, User name, Current user and Author, including the missing sign-in.</li>
         </ul>
@@ -453,7 +453,7 @@ export function NotesScreen() {
           <li>Slice UI links to app routes: <code>NotesList</code> to <code>/notes/$noteId</code>, <code>UserSwitcher</code> to <code>/users</code>. The paths are typed through <code>routes.tsx</code>, so slice UI depends on the composition root in a way the check can't see. A screen could pass the link in instead.</li>
           <li>The kit doesn't describe the render-slot pattern (<code>renderAuthor</code>, the <code>CurrentUser</code> render prop). The other session invented it. It belongs in the kit's TypeScript guide so the next slice copies it.</li>
           <li>The kit doesn't say that a use case may read another slice's port, as <code>CreateNote</code> reads <code>UserStore</code>. It is allowed, because ports belong to the app, not the slice. One line in <code>docs/ARCHITECTURE.md</code> would settle it.</li>
-          <li>The <code>x-user-id</code> header is defined in the notes routes. It moves to <code>sharedui/http.ts</code> when a second slice writes as the current user, and becomes a port when sign-in arrives.</li>
+          <li>The notes routes define the <code>x-user-id</code> header. It moves to <code>sharedui/http.ts</code> when a second slice writes as the current user, and becomes a port when sign-in arrives.</li>
         </ul>
       </div>
     </div>

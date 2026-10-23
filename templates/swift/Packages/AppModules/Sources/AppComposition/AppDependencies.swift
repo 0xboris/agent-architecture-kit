@@ -1,8 +1,6 @@
 import Domain
 import Utilities
 
-/// The adapters that the app runs with. `live()` creates the real ones;
-/// the composition test passes stubs from TestSupport.
 public struct AppDependencies: Sendable {
     public var noteStore: any NoteStore
     public var time: any TimeSource

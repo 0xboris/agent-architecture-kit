@@ -5,20 +5,19 @@ This kit sets up a codebase that coding agents can extend without eroding it. It
 - **A shared architecture.** Horizontal layers, vertical feature slices, ports, middleware, and a composition root, written down in `docs/ARCHITECTURE.md`.
 - **Tooling that enforces it.** A check fails on wrong imports and misplaced code, a reference slice shows agents the shape of new code, and Claude Code integration runs the check before an agent finishes.
 
-It works for Swift apps built from local packages, and for Go and TypeScript services. It does not depend on a framework: frameworks are allowed per module kind in `architecture.json`, and the reference slice shows how the project uses them.
+It works for Swift apps built from local packages, and for Go and TypeScript services. It does not depend on a framework. Each project allows frameworks per module kind in `architecture.json`, and the reference slice shows how the project uses them.
 
 ## What is in the kit
 
 ```
 docs/ARCHITECTURE.md              the architecture, for agents and people (copied into each project)
 docs/architecture/<language>.md   the language rules for Swift, Go, and TypeScript
+docs/architecture/where-code-goes.md   which module new code belongs in
+docs/architecture/review.md       the questions every review answers
 tools/archcheck.py                the architecture check
 tools/new.py                      creates projects and adopts existing ones (runs from the kit only)
 tools/agent-stop-check.sh         Claude Code Stop hook that runs ./check
-tools/gateguard.py                CI check that keeps gate-file changes out of branches other than main
-tools/vendor_pstack.py            builds the kit's copy of pstack (runs from the kit only)
-.claude-plugin/marketplace.json   the kit as a Claude Code plugin marketplace
-plugins/                          the kit's copy of pstack, and how it differs from upstream
+tools/gateguard.py                CI check that fails a loosened check without an approved exception, and runs the base branch's project checks
 templates/common/                 AGENTS.md, CLAUDE.md, GLOSSARY.md, .claude/, CODEOWNERS
 templates/swift|go|typescript/    a working project with the Notes reference slice and its stack.md
 examples/                         pages that show the architecture in example projects (not copied into projects)
@@ -26,14 +25,15 @@ examples/                         pages that show the architecture in example pr
 
 Each project receives:
 
-- **The docs.** `docs/ARCHITECTURE.md`, its language guide, `docs/architecture/stack.md` for the project's libraries, and the generated module map.
-- **The tools.** `tools/archcheck.py`, the Stop hook script, the gate guard, and `./check`, the one command that verifies everything.
+- **The docs.** `docs/ARCHITECTURE.md`, its language guide, `where-code-goes.md`, the review questions in `review.md`, `docs/architecture/stack.md` for the project's libraries, and the generated module map.
+- **The tools.** `tools/archcheck.py`, the Stop hook script, the gate guard, and `./check`, the one command that verifies everything. It also runs every executable in `checks/`, where agents add project checks.
 - **The configuration.** `architecture.json` maps directories to module kinds and sets the rules for each kind, and `architecture-baseline.json` holds the violations you have accepted.
-- **Agent instructions.** `AGENTS.md`, which names the reference slice, a `CLAUDE.md` that imports it, and a `README.md` to fill in with what the project does.
-- **Claude Code integration in `.claude/`.** The Stop hook, a path-scoped rule that points agents to the docs, the `new-slice` and `new-port` checklists, and the `architecture-reviewer` subagent.
-- **Code owners.** `.github/CODEOWNERS` covers the gate files and the composition root.
-- **CI.** `.github/workflows/check.yml` runs `./check`, and the gate guard on pull requests into branches other than main.
-- **The Notes reference slice.** A small working feature with a domain rule, a port, middleware, a slice, an adapter, stubs, adapter tests against the real file system, and a composition test.
+- **Agent instructions.** `AGENTS.md`, which names the reference slice, sends every review to the review questions, and pairs each rule with what enforces it. A `CLAUDE.md` that imports it, and a `README.md` to fill in with what the project does.
+- **Claude Code integration in `.claude/`.** The Stop hook, a path-scoped rule that points agents to the docs, the `new-slice` and `new-port` checklists, the `deslop` skill, and pstack, enabled from its upstream marketplace.
+- **Code owners.** `.github/CODEOWNERS` covers the gate files, which define the checks, and the composition root, which decides the middleware each slice receives.
+- **CI.** On every pull request, `.github/workflows/check.yml` runs the gate guard and the existing project checks as the base branch has them. Then it runs `./check`, and fails when `./check` changed or added a file. The guard fails when the baseline rises, an existing project check changes or goes away, a glossary term goes, or production code gains a suppression comment, unless the pull request adds an exception to `AGENTS.md` with a reason and an expiry date. It also fails every pull request once an exception has expired.
+- **A verification skill, for Go and TypeScript.** `.claude/skills/verify-<name>/` starts the service on a temporary data directory, sends requests to it, and keeps each request and response as evidence. Its feature map covers the Notes slice and grows with the project. For Swift, generate one with `/pstack:create-verification-skill` once the Xcode project exists.
+- **The Notes reference slice.** A small working feature with a domain rule, a port, middleware, a slice, an adapter, tests that run against the real file store in a temporary directory, a committed sample of the stored format with a test that loads it, and a composition test.
 
 ## Requirements
 
@@ -67,7 +67,8 @@ Then, in the new folder:
    - Delete the `ContentView.swift` and `<Name>App.swift` files that Xcode generated, and add `App/<Name>App.swift` to the app target.
    - Use File > Add Package Dependencies > Add Local to add `Packages/AppModules`, and link the `AppComposition` library to the app target.
    - Add an iOS build of the app to CI, as `docs/architecture/swift.md` describes.
-3. Commit, push, and set up branch protection on `main`: require pull requests, require code-owner reviews, and require the `check` workflow.
+   - Run `/pstack:create-verification-skill` to get a skill that drives the app in the simulator and keeps the evidence.
+3. Commit, push, and set up branch protection on `main`: require pull requests, require code-owner reviews, dismiss stale approvals when new commits are pushed, and require the `check` workflow.
 4. To use other libraries than the template's, follow "Changing a library" in `docs/architecture/stack.md`. Rewrite the Notes slice with them first, so agents copy the right patterns.
 5. Let agents use the Notes slice as their reference. Once your first real slice exists and follows the same patterns, delete the Notes slice, its tests, its wiring, and its glossary entries, and name the new slice as the reference in `AGENTS.md`. If the product itself has notes, its notes feature grows from the Notes slice, which stays the reference.
 
@@ -79,16 +80,17 @@ Agents should open pull requests under their own account or a GitHub App. GitHub
 python3 path/to/kit/tools/new.py adopt go ~/Dev/legacy-service --owner @your-github-user
 ```
 
-`adopt` adds the docs, tools, agent instructions, `.claude/`, and `CODEOWNERS` without overwriting files that exist. It adds `architecture.json` and `docs/architecture/stack.md` from the language template. It writes `check` if the project has none, or `check.kit` if it does. Then:
+`adopt` adds the docs, tools, agent instructions, `.claude/`, and `CODEOWNERS` without overwriting files that exist. It adds `architecture.json` and `docs/architecture/stack.md` from the language template. It writes `check` if the project has none, or `check.kit` if it does, and likewise `.github/workflows/check.yml` or `check.yml.kit`. Then:
 
-1. **Map every directory to a kind.** Edit `modules` in `architecture.json` until `python3 tools/archcheck.py` reports no unmapped file. A module path is a directory; `{"path": "."}` maps the repository root, for example a Go `main.go`. Pick the kind by what the code does today: handlers are `ui`, database code is `adapter`, and models and business logic are `domain`.
+1. **Map every directory to a kind.** Edit `modules` in `architecture.json` until `python3 tools/archcheck.py` reports no unmapped file. A module path is a directory, and `{"path": "."}` maps the repository root, for example a Go `main.go`. Pick the kind by what the code does today: handlers are `ui`, database code is `adapter`, and models and business logic are `domain`.
 2. **Accept what exists.** Run `python3 tools/archcheck.py --write-baseline`. From now on the check fails only on new violations.
-3. **Wire up `./check`.** Make it run your real build and tests. If you got `check.kit`, merge its architecture steps into your existing check.
-4. **Turn on the gates.** Add `@AGENTS.md` as the first line of an existing `CLAUDE.md`, commit `.claude/`, set the owner in `CODEOWNERS`, and enable branch protection as for a new project.
+3. **Wire up `./check` and CI.** Make `./check` run your real build and tests. If you got `check.kit`, merge its architecture steps into your existing check. In the workflow, set up the project's toolchain. If you got `check.yml.kit`, merge its steps into your existing workflow: the gate guard, the base branch's project checks, `./check`, and the step that fails when `./check` changed a file.
+4. **Turn on the gates.** Add `@AGENTS.md` as the first line of an existing `CLAUDE.md`, commit `.claude/`, set the owner in `CODEOWNERS`, point its composition-root lines at the project's composition root, and enable branch protection as for a new project.
 5. **Describe the stack and pick a reference.** Rewrite `docs/architecture/stack.md` for the project's libraries, and allow them per kind in `architecture.json`. Name a reference slice in `AGENTS.md`: the existing slice that best follows the architecture, or one you rebuild in that shape, using the kit's Notes slice as the model.
 6. **Write the glossary.** List the business concepts the code already uses, one heading each.
-7. **Put new work in the new shape.** New capabilities become slices in the shape of the reference slice. New rules go into the domain. New I/O goes behind ports.
-8. **Fix old code as you touch it.** When a change touches a module with violations, fix them in a separate commit and run `--write-baseline` to lower the counts. The baseline only ever goes down.
+7. **Get a verification skill.** Run `/pstack:create-verification-skill`. It writes `.claude/skills/verify-<name>/`, which drives the app the way a user does and keeps the evidence. It proves the skill once before it hands it over.
+8. **Put new work in the new shape.** New capabilities become slices in the shape of the reference slice. New rules go into the domain. New I/O goes behind ports.
+9. **Fix old code as you touch it.** When a change touches a module with violations, fix them in a separate commit and run `--write-baseline` to lower the counts. The baseline only goes down, unless you approve an exception. The gate guard fails a pull request that raises it without a row in the exceptions table of `AGENTS.md`, and lowering it needs no owner.
 
 The language guides describe the template layout. In a project with a different layout, either move toward the template layout over time, or keep the existing layout mapped in `architecture.json` and name as the reference the slice that follows the architecture best.
 
@@ -96,86 +98,100 @@ The language guides describe the template layout. In a project with a different 
 
 The Stop hook runs `./check` with the PATH of the Claude Code session, so the session needs the project's toolchain, such as Node 24 and the package manager, on its PATH.
 
-Agents read `AGENTS.md` at the start of each task and the architecture docs when they touch code. They copy the structure of the reference slice, using the `new-slice` and `new-port` checklists, run `./check` after each step, and cannot finish a task while the check fails. Before a pull request, they ask the `architecture-reviewer` subagent for the judgment calls the check cannot make.
+Agents read `AGENTS.md` at the start of each task and the architecture docs when they touch code. They copy the structure of the reference slice, using the `new-slice` and `new-port` checklists, run `./check` after each step, and cannot finish a task while the check fails. Every review answers the questions in `docs/architecture/review.md` for the judgment calls the check cannot make. When an agent runs `/pstack:interrogate`, `AGENTS.md` tells it to pass that file to the reviewers as a context file.
 
 Your review stays small:
 
-- **Diffs to gate files.** `CODEOWNERS` sends you every change to `architecture.json`, the baseline, `check`, `tools/`, `.claude/`, `.github/`, and the instruction files. An agent that weakens a check shows up here.
-- **Diffs to the composition root.** Legitimate changes are a few lines of wiring. Anything larger is feature code in the wrong place.
-- **Ports and stored formats.** New ports, renamed stored or sent fields, and migrations deserve a careful look, because no test catches a format that only breaks old data.
+- **Diffs to gate files.** `CODEOWNERS` sends you every change to `architecture.json`, `check`, `tools/`, `.claude/`, `.github/`, the instruction files, and the compiler, linter, and test runner settings. An agent that weakens a check shows up here. Changes that only tighten a check need no review: a lower baseline, a new project check in `checks/`, and a new glossary term. A change that loosens one of them, or adds a suppression comment to production code, needs a row in the exceptions table of `AGENTS.md` with a reason and an expiry date. The row brings the pull request to you, and CI marks the loosening on it.
+- **The composition root.** It decides which middleware each slice receives, such as authentication, and no check sees a slice lose one. The architecture check limits it to wiring, so its diffs are a few lines.
+- **New ports, stored formats, and wire contracts.** The first version of a format is the one old data will be in. A test that loads a committed sample of each stored format catches a renamed field, but not a format that was wrong from the start.
 
-When agents keep making the same mistake, improve the tooling instead of adding prose. Preferred fixes, in order:
+When agents keep making the same mistake, fix the repository instead of the next prompt. `/pstack:correct` finds the mistake classes in the history and fixes each at the highest level that works:
 
-1. A check, with the fix in its message.
-2. A better reference slice.
-3. A sentence in `docs/ARCHITECTURE.md`, only when nothing else can carry it.
+1. Make the mistake impossible, with the architecture or a better reference slice.
+2. Block it with a type, a rule in `architecture.json`, a lint rule, or a project check in `checks/`, with the fix in its message.
+3. Catch it with a test.
+4. Add a row to the rule table in `AGENTS.md`, or a sentence to the docs, only when nothing else can enforce it.
 
-Upgrade a project to a newer kit by copying `tools/archcheck.py`, `tools/agent-stop-check.sh`, `docs/ARCHITECTURE.md`, and the project's language guide from `docs/architecture/` out of the kit, then running `./check`. The kit owns these files, so the project does not edit them. Read the diff of the docs: a new rule may need a change in the project. Projects created before 2026-10-15 also have `tools/new.py`, which they can delete: new code now copies the reference slice.
+To upgrade a project to a newer kit, copy these files out of the kit and run `./check`: `tools/archcheck.py`, `tools/gateguard.py`, `tools/agent-stop-check.sh`, `docs/ARCHITECTURE.md`, the project's language guide, `where-code-goes.md`, and `review.md` from `docs/architecture/`, and `.claude/skills/deslop/`. The kit owns these files, so the project does not edit them. Read the diff of the docs, because a new rule may need a change in the project. Projects created before 2026-10-15 also have `tools/new.py`, which they can delete, because new code copies the reference slice.
 
 TypeScript projects created before 2026-10-19 have no linter. To add it:
 
 1. Copy `templates/typescript/.oxlintrc.json` to the project root, and change the paths in its `overrides` to the project's source and domain directories. In a repository with several apps, `docs/architecture/typescript.md` says which paths to use.
-2. Add `oxlint` and `oxlint-tsgolint` to `devDependencies`, at the versions in `templates/typescript/package.json`. A project on TypeScript 6 or below can keep ESLint with typescript-eslint instead; the rules in the language guide hold either way.
-3. Add `step lint npx oxlint` to `./check`, before the type check, and add `/.oxlintrc.json` to `.github/CODEOWNERS`.
-4. Run `npx oxlint` and fix what it reports. Most findings in tests are stubs written as `async` functions without `await`, and JSON responses read as `any`.
+2. Add `oxlint` and `oxlint-tsgolint` to `devDependencies`, at the versions in `templates/typescript/package.json`. A project on TypeScript 6 or below can keep ESLint with typescript-eslint instead. The rules in the language guide hold either way.
+3. Add `step lint npx oxlint --disable-nested-config` to `./check`, before the type check, and add `**/.oxlintrc.json` to `.github/CODEOWNERS`. The flag keeps a settings file in a subfolder from switching rules off there.
+4. Run `npx oxlint --disable-nested-config` and fix what it reports. Most findings in tests are stubs written as `async` functions without `await`, and JSON responses read as `any`.
 5. Describe the linter in `docs/architecture/stack.md`, as the template's copy does.
 
-## Workflow plugins such as pstack
+## pstack
 
-A workflow plugin decides how an agent works: which steps it takes, which subagents it spawns, and how it reviews and lands its pull requests. [pstack](https://github.com/cursor/plugins/tree/main/pstack) is one. The kit decides where code goes and fails the check when code goes elsewhere. The two work together, with the kit's rules on top.
+[pstack](https://github.com/cursor/plugins/tree/main/pstack) decides how an agent works: which playbook it follows, which subagents it spawns, how it proves its work, and how it reviews and lands pull requests. The kit decides where code goes, and fails the check when code goes elsewhere. The kit follows pstack's principles, so an agent reads one set of rules:
 
-The kit serves its own copy of pstack with ten edits, which `plugins/README.md` lists. Read literally, a few pstack rules remove layers that the architecture requires, replace the stubs that its testing rules prescribe, or tell the agent to fix a failing check itself. Each edit scopes one such rule to what the repository's architecture docs allow, so the agent reads one set of rules instead of two that disagree. The edits name no part of the kit, and `plugins/README.md` describes how to propose them upstream. Once upstream has them, enable `pstack@cursor-plugins` instead.
+- **Layers.** Each layer of the architecture states its reason, and the docs say to leave out a wrapper that has none. Here the kit departs from pstack on purpose. Minimize Reader Load would inline a port with one adapter and a use case with one caller. The kit keeps both. The port keeps outside types and I/O out of the domain, the use case is the one way from UI to the ports, and the architecture check enforces both. `docs/architecture/review.md` gives reviewers that reason.
+- **Tests.** Tests run against real adapters wherever those run locally, and test doubles only make a port fail or stand in for time, ids, and remote services. pstack's TypeScript rules and Test Behavior, Not Implementation ask for this.
+- **Proof.** A change is done when the verification skill shows it working in the running app, not when it compiles.
+- **Gates.** A new check in `checks/`, a lower baseline, and a committed script need no owner, so most of what `/pstack:correct` and Build the Lever produce doesn't wait for you. A new lint rule, a new row in the rule table of `AGENTS.md`, and a change to the verification skill or the composition root still do, because the same files can also loosen a check. `/pstack:create-verification-skill` says never to weaken a journey to make it pass, and your review of the skill holds agents to that.
+- **Exceptions.** `/pstack:correct` puts an exception on the offending line with a reason, an expiry date, and a human's approval. Here a suppression comment names its reason on its line, and a row in the exceptions table of `AGENTS.md` holds the expiry date and your approval, because the gate guard can enforce them there. A raised baseline or a changed check has no line, so its row holds all three.
+- **Review.** Every review answers `docs/architecture/review.md`. `AGENTS.md` tells agents to pass it to the reviewers of `/pstack:interrogate` as a context file, and keeps the rule table that `/pstack:correct` maintains and the exceptions that you approve.
 
-To enable the kit's copy for everyone who works on a project, add this to `.claude/settings.json`. It is a gate file, so commit the change yourself.
+Projects use upstream pstack, unchanged. The template's `.claude/settings.json` enables it for everyone who works on the project:
 
 ```json
 "extraKnownMarketplaces": {
-  "agent-architecture-kit": {"source": {"source": "github", "repo": "0xboris/agent-architecture-kit"}}
+  "cursor-plugins": {"source": {"source": "github", "repo": "cursor/plugins"}}
 },
-"enabledPlugins": {"pstack@agent-architecture-kit": true}
+"enabledPlugins": {"pstack@cursor-plugins": true}
 ```
 
-Claude Code registers the marketplace after a contributor accepts the workspace trust dialog, and only for contributors who can read the kit's repository. Cloud sessions show no such dialog, so install the plugin there with `/plugin install pstack@agent-architecture-kit`. Then type `/pstack:poteto-mode` before a task.
+Claude Code registers the marketplace after a contributor accepts the workspace trust dialog. Cloud sessions show no such dialog, so install the plugin there with `/plugin marketplace add cursor/plugins` and `/plugin install pstack@cursor-plugins`. Run `/pstack:setup-pstack` once to pick the models, then type `/pstack:poteto-mode` before a task that needs rigor. pstack's own adapter maps its Cursor names to Claude Code, and skips steps that need a Cursor-only feature, such as Bugbot. pstack also runs `/deslop` before each commit, and the `control-ui` and `control-cli` skills to drive an app. All three come from Cursor's cursor-team-kit plugin, which the marketplace does not offer to Claude Code. The kit ships cursor-team-kit's `deslop` skill unchanged in `.claude/skills/deslop/`, with its MIT license, as of cursor/plugins commit eb4db2b. To update it, copy `cursor-team-kit/skills/deslop/SKILL.md` from a newer commit. The verification skill drives the app in place of the control skills.
 
 The architecture holds in a pstack session for these reasons:
 
 - **The check.** The Stop hook runs `./check` in the checkout or git worktree the session works in. UI that uses a port fails the check, so an agent cannot replace a use case by calling its port from the UI.
-- **The gates.** Branch protection and `CODEOWNERS` hold every change to a gate file on main for your review, and the gate guard keeps gate changes out of feature branches. pstack's autonomous playbooks merge pull requests on their own but never bypass an approval that GitHub enforces. This works only when agents open pull requests under their own account, as described under "Start a new project".
-- **The kit's copy of pstack.** Its rules keep the layers that `docs/ARCHITECTURE.md` requires, and it treats an owner's gate as a gate, not as a tooling failure.
-- **The precedence section.** The "Skills and plugins" section in `AGENTS.md` covers what no edit does: a failing check is a finding in the code, and rules and checks that a workflow writes are gate changes. Claude Code loads it in every session and in pstack's subagents.
-- **The reviewer.** The `architecture-reviewer` subagent runs before each pull request, next to pstack's own reviews.
+- **The gates.** Branch protection and `CODEOWNERS` hold every change to a gate file on main for your review. pstack's autopilot playbooks merge pull requests on their own, but never give or bypass an approval that GitHub enforces. This works only when agents open pull requests under their own account, as "Start a new project" describes.
+- **The verification skill.** pstack's playbooks prove each change in the running app, and the verification skill is how they drive it in a kit project.
 
-The Stop hook runs only when the main session finishes. pstack's subagents run `./check` because `AGENTS.md` tells them to, and the main session's Stop hook checks their combined work. If the main session ends a turn while subagents still edit files, the hook can report failures in their unfinished work.
+The Stop hook runs only when the main session finishes, so it checks the work of the subagents that share its checkout. pstack runs some subagents in a worktree of their own, such as the owners of Autopilot-full and the workers of `/swarm`. The hook never runs there. Those subagents run the repository's checks themselves, as pstack's playbooks require, and CI runs `./check` on each of their pull requests.
 
-Projects created before 2026-10-21 get all of this, the port check and the gate guard included, with these steps:
+### Upgrade a project created before 2026-10-22
 
-1. Copy `tools/archcheck.py`, `tools/gateguard.py`, and `tools/agent-stop-check.sh` from the kit.
-2. In `architecture.json`, add `portFiles` with the files that declare the ports, and `"forbidPorts": true` to each UI kind, as the language template does. Run `./check` and fix or baseline what it reports.
-3. Add the gate guard step and `fetch-depth: 2` to `.github/workflows/check.yml`, as in the language template.
-4. Copy the "Skills and plugins" section of `templates/common/AGENTS.md` into the project's `AGENTS.md`, and question 13 of `templates/common/.claude/agents/architecture-reviewer.md` into the project's reviewer.
+1. Copy `tools/archcheck.py`, `tools/gateguard.py`, `tools/agent-stop-check.sh`, `docs/ARCHITECTURE.md`, and from `docs/architecture/` the language guide, `where-code-goes.md`, and `review.md` out of the kit.
+2. In `architecture.json`, add `"scriptFiles": ["scripts/**", "checks/**"]`. Add `portFiles`, and `"forbidPorts": true` on each UI kind, if the project has neither yet. In TypeScript, copy the `brand` set from the template's `forbiddenCallSets`, and add `@brand` to the `forbiddenCalls` of every kind except the domain. Add `.scratch/` and `.verify/` to `.gitignore`. The architecture check now fails when the baseline accepts more violations than exist, so run `python3 tools/archcheck.py --write-baseline` if it says so.
+3. In TypeScript, add `scripts` and `checks` to the `include` of `tsconfig.json` and to the files of the type-assertion rule in the linter settings. Remove the domain from that rule's excluded files, and replace each type assertion in the domain with a type guard, like `isNoteTitle`.
+4. Copy the language template's `check` over the project's, and merge back the project's own steps. It runs each executable in `checks/`, and keeps its work in one function, so that no step can rewrite the rest of the script. Copy the language template's `.github/workflows/check.yml` the same way. It runs the gate guard on every pull request, runs the base branch's project checks with `python3 tools/gateguard.py --base-checks` before `./check`, and ends with a step that fails when `./check` changed or added a file.
+5. Copy `templates/common/.claude/skills/deslop/` into `.claude/skills/`.
+6. Run `new.py init` for the project's language in an empty folder, with your owner, and copy its `.github/CODEOWNERS`. The baseline then needs no owner, the composition root keeps one, and settings files are owned wherever they sit.
+7. Replace `AGENTS.md` and `CLAUDE.md` with the template's. Keep the project's reference slice and its own rows in the rule table, and list any loosening the project already lives with in the exceptions table, with a reason and an expiry date. Suppression comments that exist already need no row, because the gate guard checks only added lines. Delete `.claude/agents/architecture-reviewer.md`.
+8. In `.claude/settings.json`, replace the lines for `pstack@agent-architecture-kit` with the template's lines for `pstack@cursor-plugins`.
+9. Run `/pstack:create-verification-skill`, or copy the template's verification skill and change its launch line.
+10. Rewrite the reference slice's tests to run against the real adapter, as the template's do. Commit a sample of each stored format, with a test that loads it.
 
-## Autopilot on a feature branch
+Run `./check` after each step.
 
-Agents can build a large feature on their own: several tracks in parallel, each delivered as pull requests into one feature branch, and one pull request from the feature branch into main at the end, which you review and approve. pstack's Autopilot-full playbook comes closest, with the feature branch in place of main. These steps keep the architecture intact during the run, and keep the final review small enough to be a real review.
+## Autopilot with pstack
 
-1. **Review the foundation before the tracks start.** The first pull request into the feature branch holds the shared shape: glossary entries, domain types and rule signatures, new ports and their result types, changes to stored formats and wire contracts, and an empty slice with its wiring for each track. Every track builds on it, so a mistake here costs the most when it is found late.
-2. **Let the tracks run.** Slices never import each other, so tracks mostly touch different files, apart from the domain and the composition root. A track's pull request merges into the feature branch once CI passes, the architecture reviewer has run, and the workflow's own verification is done.
-3. **Keep the gates.** Branch protection usually covers only main, so the feature branch has no owner review. The gate guard fails a pull request into any branch other than main that changes a gate file, so agents put gate changes into their own pull request against main and wait for you on that track. GitHub runs the workflow from the pull request itself, so a pull request that deletes the guard step also passes. That deletion is a change to `.github/`, so it appears among the gate files of the final review.
-4. **Merge, never rebase, the shared branch.** Merge track pull requests with merge commits, so that each track stays visible, and merge main into the feature branch regularly. Several agents work from the branch, so its history must not change under them.
-5. **Ask for a review guide in the final pull request.** Its description lists the gate-file changes, which should be none; the composition-root diff; the ports, stored formats, and wire contracts that changed after the foundation review; and each track, with links to its pull requests and their verification. Review those closely and skim the rest, which the check, the tests, and the verifiers have covered.
-6. **Let an agent identity open the final pull request.** GitHub does not let you approve your own pull request.
+pstack runs large work on its own with two playbooks. Both keep the kit's gates, because every pull request ends up merging into main, where branch protection and `CODEOWNERS` apply.
 
-Try it first on a medium feature with two or three tracks before you trust it overnight. It has not been tried with the kit yet.
+- **Autopilot-stack** builds a queue of changes as one linear stack of pull requests, each with a verdict from an agent that did not write it, and stops. You review the stack and land it. Use it when you want to see the work before it lands, or when the changes depend on each other: `/pstack:poteto-mode autopilot these changes but stack them, don't ship.`
+- **Autopilot-full** runs independent pull requests to merged, with one owner agent per pull request. An owner merges only after a swarm of verifiers has proven its code. A pull request that changes a gate file still waits for your approval, which no agent gives or bypasses.
+
+Before a run on a large feature:
+
+1. **Review the foundation first.** Make the first pull request hold the shared shape: glossary entries, domain types and rule signatures, new ports and their result types, changes to stored formats and wire contracts, and an empty slice with its wiring for each track. Every later pull request builds on it, so a mistake here costs the most when it is found late.
+2. **Keep gate changes out of the feature work.** A new kind in `architecture.json` or a changed lint setting goes into its own pull request against main, which waits for you. Plan the run so that nothing else waits on it.
+3. **Let agent identities open the pull requests.** GitHub does not let you approve your own pull request.
+
+Try it first on a medium feature with two or three tracks before you trust it overnight. Nobody has tried it with the kit yet.
 
 ## Frameworks
 
 The architecture names no framework. The domain and use cases import none, so a framework can only sit in UI, adapters, the composition root, and tests. Each project allows its frameworks per kind in `architecture.json`, describes them in `docs/architecture/stack.md`, and shows how to use them in the reference slice. The templates use only each language's standard library. To switch to other libraries, follow "Changing a library" in `docs/architecture/stack.md`.
 
-Frameworks that stay in one layer fit, such as HTTP routers, ORMs and query builders inside an adapter, job queues, HTTP clients, test runners, and UI libraries like React or SwiftUI. None of them has been tried with the kit yet.
+Frameworks that stay in one layer fit, such as HTTP routers, ORMs and query builders inside an adapter, job queues, HTTP clients, test runners, and UI libraries like React or SwiftUI. Nobody has tried any of them with the kit yet.
 
 Frameworks that want to own the structure fit badly:
 
-- **File-based full-stack frameworks, such as Next.js.** The framework fixes the folder layout, and server actions put data access in UI files. The check fights the framework.
+- **File-based full-stack frameworks, such as Next.js.** The framework fixes the folder layout, and server actions put data access in UI files. Code laid out the framework's way fails the check.
 - **Frameworks with their own dependency injection container, such as NestJS.** The kit wires dependencies by hand in the composition root and allows no service locators. NestJS's decorators also do not work with Node's type stripping, which the TypeScript template uses.
 - **Active-record ORMs, where database models are the business model.** They work only if the adapter maps its models to domain types, as the Swift template's `NoteRecord` does.
 
@@ -184,8 +200,8 @@ Frameworks that want to own the structure fit badly:
 Lines that start with `//` are comments.
 
 - **`language`.** `swift`, `go`, or `typescript`.
-- **`sourceRoots`.** Directories to scan. The templates scan the whole repository (`.`), so a source file outside every module fails as unmapped.
-- **`testFiles` and `ignore`.** Glob patterns, matched against paths from the repository root. `*` stays within one directory and `**` crosses directories, so `*.config.ts` matches only files in the root. Test files are exempt from the import rules.
+- **`sourceRoots`.** Directories to scan. The templates scan the whole repository (`.`), so a source file outside every module fails as unmapped. The check skips directories at the repository root whose names start with a dot, so prototypes go into `.scratch/`, which `.gitignore` lists. It checks a dot directory inside a module like the rest of the module.
+- **`testFiles`, `scriptFiles`, and `ignore`.** Glob patterns, matched against paths from the repository root. `*` stays within one directory and `**` crosses directories, so `*.config.ts` matches only files in the root. Test files and script files, such as a codemod in `scripts/` or a project check in `checks/`, are exempt from the import rules, and production code may not import them. The gate guard lets them add suppression comments without an exception.
 - **`glossary`.** The glossary file. Its level-2 headings are the terms banned from modules with `"bannedTerms": "glossary"`. The check splits identifiers into words, so the heading "API key" matches `apiKey`, `APIKey`, `api_key`, and `apiKeys`. A one-word heading that is also a common word, such as "Sync", matches identifiers like `readFileSync`, so prefer specific headings such as "Sync run".
 - **`modules`.** Maps directories to kinds.
   - `path` may use `*` for one directory level, and `{1}` in `name` or `slice` inserts what the first `*` matched.
@@ -225,7 +241,7 @@ Tested on macOS on 2026-10-14 with Python 3.14, Swift 6.4 and Xcode 27, Go 1.27,
 - **Stop hook.** It blocks the first stop while the check fails, allows the second stop, and does nothing when no files changed. I tested it by running the script directly.
 - **Adoption.** `adopt` worked on a small legacy Go project: mapping, baseline, and a new violation failing.
 
-Retested on Linux on 2026-10-15, after the generators were removed and the fakes and contracts were replaced by stubs and adapter tests, with Python 3.13, Go 1.24.7, Node 22.22, and TypeScript 7.0.2:
+Retested on Linux on 2026-10-15, after the kit removed the generators and replaced the fakes and contracts with stubs and adapter tests, with Python 3.13, Go 1.24.7, Node 22.22, and TypeScript 7.0.2:
 
 - **New projects.** `init go` and `init typescript` create projects whose `./check` passes.
 - **Adoption.** `adopt go` on a small Go project adds `docs/architecture/stack.md` and keeps existing files.
@@ -233,7 +249,7 @@ Retested on Linux on 2026-10-15, after the generators were removed and the fakes
 Retested on Linux on 2026-10-15 with Node 24.22, after fixes from a test setup by a fresh agent:
 
 - **`init` in an empty clone.** `init typescript` and `init go` work in a directory that holds only `.git`, and `./check` passes, including the install step from an empty `node_modules`.
-- **Architecture check.** A `.js` file in the domain is checked like a `.ts` file. `@hono/*` in `external.allow` allows `@hono/node-server`. A reference to an unknown set fails with a configuration error.
+- **Architecture check.** The check treats a `.js` file in the domain like a `.ts` file. `@hono/*` in `external.allow` allows `@hono/node-server`. A reference to an unknown set fails with a configuration error.
 - **Stop hook.** In a repository without commits, it runs `./check` when files exist.
 
 Retested on Linux on 2026-10-15 with Node 24.22, after a second test setup by a fresh agent:
@@ -241,38 +257,72 @@ Retested on Linux on 2026-10-15 with Node 24.22, after a second test setup by a 
 - **Architecture check.** Glossary terms match identifiers by words, including acronyms and plurals. An import of an unmapped file and an import of a test file from production code both fail. The check passes on all three templates.
 - **New projects.** `init typescript` and `init go` pass `./check`.
 
-On 2026-10-19, a test project was moved to the layout for several apps in one repository: an API, a React web app, and a shared domain package. Tested there:
+On 2026-10-19, I moved a test project to the layout for several apps in one repository: an API, a React web app, and a shared domain package. Tested there:
 
 - **The check.** It reports an import between apps, an import into a slice's UI that bypasses `ui/index.ts`, a screen that imports use cases, and a package import in the shared domain.
 - **The contract.** `./check` fails when `openapi.json` no longer matches the API's routes.
-- **The app.** The web app, in Chromium against the API on a Postgres-compatible server (PGlite), creates, lists, and opens notes. An empty title is rejected in the browser before any request.
+- **The app.** The web app, in Chromium against the API on a Postgres-compatible server (PGlite), creates, lists, and opens notes. The browser rejects an empty title before any request.
 
 Retested on Linux on 2026-10-19 with Node 24.22, TypeScript 7.0.2, oxlint 1.88.0, and oxlint-tsgolint 7.0.2004:
 
 - **Lint.** `init typescript` creates a project whose `./check` passes, including the new lint step. Lint fails on `'x' as NoteTitle` in a slice's UI, passes it in the domain, fails on `JSON.parse` assigned to a typed value, and allows `as const`.
 - **Adoption.** `adopt typescript` adds `.oxlintrc.json` and keeps an existing one.
 - **Several apps.** The test project with an API, a React web app, and a shared domain moved from TypeScript 6 and ESLint to TypeScript 7 and oxlint, and `./check` passes: the contract, lint, type checks of every package, Vitest, and the Vite build. Lint fails on an assertion in a slice's `.tsx` file and on a list item without a key, and allows assertions in the shared domain and in tests. openapi-typescript, which needs TypeScript's JavaScript API, runs with TypeScript 5.9 from a package of its own and generates the same client. The hooks rule runs only on the React app, because the API's `useCases()` wiring helper is not a hook.
-- **A fresh agent.** Given only the kit and the stack, a new agent built an API, a web app, and a shared domain with notes and users. It arrived at the same design, with an author slot that a screen fills and the edit rule in the shared domain, and `./check` passed. The gaps it reported are fixed: the steps from one app to several, an `architecture.json` for several apps, the React hooks rule, the shared domain's tests, `openapi.ts` in `allowedFiles`, and the fix message for an import between slices whose kinds have project names, such as `web-ui`.
+- **A fresh agent.** Given only the kit and the stack, a new agent built an API, a web app, and a shared domain with notes and users. It arrived at the same design, with an author slot that a screen fills and the edit rule in the shared domain, and `./check` passed. I fixed the gaps it reported: the steps from one app to several, an `architecture.json` for several apps, the React hooks rule, the shared domain's tests, `openapi.ts` in `allowedFiles`, and the fix message for an import between slices whose kinds have project names, such as `web-ui`.
 
 Retested on Linux on 2026-10-20, after the Stop hook learned to check git worktrees:
 
 - **Stop hook.** I ran the script directly with hook input. With `cwd` in a git worktree of the project, it runs `./check` there and blocks on a failing change that the main checkout does not have. Before this change, it passed. With `cwd` in another repository, outside any repository, or missing, it checks the main checkout as before.
 
-Retested on Linux on 2026-10-21, after the port check, the gate guard, and the kit's copy of pstack were added:
+Retested on Linux on 2026-10-21, after the kit added the port check, the gate guard, and its copy of pstack:
 
-- **Port check.** `init` creates TypeScript, Go, and Swift projects whose architecture check passes. A port used in a slice's UI fails in all three, also as a qualified name such as `domain.NoteStore` in Go. A port named in a comment or a string passes. The baseline accepts the violation. A UI kind with `forbidPorts` and no `portFiles` is a configuration error. Swift was checked with the architecture check only, without a Swift build.
+- **Port check.** `init` creates TypeScript, Go, and Swift projects whose architecture check passes. A port used in a slice's UI fails in all three, also as a qualified name such as `domain.NoteStore` in Go. A port named in a comment or a string passes. The baseline accepts the violation. A UI kind with `forbidPorts` and no `portFiles` is a configuration error. For Swift, only the architecture check ran, without a Swift build.
 - **Gate guard.** I ran the script directly in a TypeScript and a Go project. It passes wiring changes in the composition root, a new slice, a glossary entry, and the generated module map. It fails on `architecture.json`, `package.json`, `go.mod`, and a deleted `.claude/settings.json`. The workflow step itself has not run on GitHub yet.
-- **The kit's copy of pstack.** `tools/vendor_pstack.py` applied all ten edits to cursor/plugins at commit 190d287, and upstream's generator check and plugin validator pass on the result. `claude plugin validate` passes on the marketplace and the plugin, and Claude Code installs `pstack@agent-architecture-kit` from a local clone of the kit.
+- **The kit's copy of pstack.** `tools/vendor_pstack.py` applied all ten edits to cursor/plugins at commit 190d287, and upstream's generator check and plugin validator pass on the result. `claude plugin validate` passes on the marketplace and the plugin, and Claude Code installs `pstack@agent-architecture-kit` from a local clone of the kit. The kit removed its copy on 2026-10-22.
+
+Retested on Linux on 2026-10-22 with Python 3.13, Node 22.22, TypeScript 7.0.2, oxlint 1.88.0, and Go 1.24.7, after the kit aligned with upstream pstack and removed its copy of pstack. The kit requires Node 24, so the TypeScript template still needs a run on Node 24.
+
+- **New projects.** `init typescript` and `init go` create projects whose `./check` passes, with the reference slice's tests running against the real file store. In both languages, a renamed stored field fails the test that loads the committed file in that format, and only that test. In TypeScript, `as NoteTitle` in the domain fails lint.
+- **Gate guard.** Run in a git repository of a TypeScript project, it passes a new check in `checks/` and a lower baseline. It fails when an existing check changes or is deleted, and when the baseline gains a violation.
+- **Project checks and scripts.** `./check` runs an executable in `checks/` as its own step, and the step fails on the mistake it checks for. A TypeScript file in `scripts/` passes the architecture check, and production code that imports it fails.
+- **Verification skills.** I followed each skill's own steps on a fresh Go project and a fresh TypeScript project: start, doctor, both feature recipes, and stop. Every step gave the result that its feature file describes, the evidence survived cleanup, and no server process kept running. The doctor reports a stopped instance as a failure.
+- **Swift.** Only the architecture check ran, which passes.
+
+Retested the same day, after an independent review found holes in the gate guard and the scripts:
+
+- **Gate guard.** It fails on a changed check with a non-ASCII name, on a check that lost its executable bit, and on a baseline that comes back with a violation after a pull request deleted it. It reads a baseline with comments. A pull request that loosens a check and also changes `AGENTS.md` passes, because that file sends it to the owner.
+- **Project checks.** `./check` skips a non-executable helper file and a folder in `checks/`, and passes.
+- **Verification skill.** In a project inside a larger git repository, the run directory lands in the project. A second `stop` does nothing.
+- **Code owners.** A new TypeScript project's `CODEOWNERS` owns `package.json` and `package-lock.json` again, so an install script can't switch off `./check` without your review.
+
+Retested later that day, after `deslop` was added and `./check` moved its work into one function:
+
+- **A step that rewrites `./check`.** A test that overwrote `check` while it ran, together with a real architecture violation, made the old script print `FAIL architecture` and still exit 0. The new script exits 1, and the CI step that fails when `./check` changed a file fails on the rewritten file.
+- **`deslop`.** `init` copies the skill and its license into `.claude/skills/deslop/`, unchanged from cursor/plugins at commit eb4db2b.
+
+Retested after a second independent review:
+
+- **A new check that neutralizes an existing one.** A pull request added a TODO and a check that rewrote the existing `no-todo` check, then restored it. `./check` passed and left no changed file, but the run of the checks as the base branch has them failed `no-todo`. CI does that run before `./check`.
+- **Exceptions.** A pull request that changed an existing check and added a space to `docs/architecture/stack.md` failed the gate guard, with an error annotation in GitHub Actions format. With a row in the exceptions table of `AGENTS.md`, it passed, with a warning annotation. A removed glossary term fails, and a new one passes.
+- **Nested settings and dot directories.** With `--disable-nested-config`, oxlint still reported an assertion in a slice when `src/features/.oxlintrc.json` turned off every plugin. A file in `src/domain/.io/` that imports `node:fs` fails the architecture check.
+- **Temporary directories.** The TypeScript tests leave none behind. The Swift tests remove theirs with `defer`, but nobody has compiled them yet.
+
+Retested after a third independent review:
+
+- **Exceptions and suppressions.** A suppression comment added to production code fails the gate guard without a new row in the exceptions table. It passes, with a warning annotation, when the pull request adds a row with a reason and a date in the future. A new row without a date or with a past date fails, also in a pull request that loosens nothing, and so does a row with one cell. A row that expired on main fails every pull request. A suppression in a test file passes. A file name that holds a newline and `::` cannot start a workflow command, because the gate guard escapes annotations as the Actions toolkit does.
+- **Base checks.** `python3 tools/gateguard.py --base-checks` fails `no-todo` as the base branch has it when a pull request changes that check and adds a TODO, and when a new check rewrites it. When the pull request adds a row to the exceptions table, it skips the changed check.
+- **Architecture check.** A baseline that accepts more violations than exist fails, with the command that lowers it. In TypeScript, `__brand` in a slice's UI fails, and the domain's brand passes.
+- **Adoption.** `adopt go` writes `.github/workflows/check.yml`, or `check.yml.kit` next to an existing workflow, and `CODEOWNERS` owns the composition root again.
+- **Verification skills.** In Go and TypeScript, `call` on a run that does not exist exits with 2 and writes no evidence.
+- **New projects.** `init typescript` and `init go` pass `./check`, and the Swift template passes the architecture check.
 
 Not tested:
 
 - **A template for several apps.** `init` still creates one app. "From one app to several" in `docs/architecture/typescript.md` gives the steps and an `architecture.json` for an API, a web app, and a shared domain.
-
-- **The Swift template after 2026-10-15.** Its new `StubNoteStore` and the rewritten tests have not been compiled. Run `./check` on macOS before relying on them.
-
-- **Claude Code in a real session.** Nobody has watched it load the Stop hook, the skills, the subagent, or the path-scoped rule. The formats follow the Claude Code documentation as of 2026-10-14.
-- **GitHub.** The GitHub Actions workflows were not run, and `CODEOWNERS` enforcement was not tried.
+- **The Swift template after 2026-10-15.** Nobody has compiled its tests, rewritten again on 2026-10-22 to run against the real file store, or `FailingNoteStore`. Run `./check` on macOS before relying on them.
+- **Claude Code in a real session.** Nobody has watched it load the Stop hook, the skills, the path-scoped rule, or `pstack@cursor-plugins` from the template's settings. The formats follow the Claude Code documentation as of 2026-10-14.
+- **GitHub.** Nobody has run the GitHub Actions workflows, so the base-branch check run, the annotations, and `CODEOWNERS` enforcement are untried on GitHub.
 - **The Xcode app.** The project steps for Swift and an iOS build of the app.
 - **Larger code.** Adoption in a real, larger codebase, and the check's speed on a large repository.
-- **pstack in a kit project.** Nobody has run pstack's playbooks in a kit project, and the autopilot workflow on a feature branch has not been tried.
+- **pstack in a kit project.** Nobody has run pstack's playbooks in a kit project, the autopilot playbooks included.
 - **Other setups.** TypeScript path aliases, TypeScript frontends or frameworks such as Express or Fastify, Core Data or SwiftData adapters, and Windows.

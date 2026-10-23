@@ -8,7 +8,7 @@
   "scripts": {
     "start": "node src/app/main.ts",
     "test": "node --test \"src/**/*.test.ts\"",
-    "lint": "oxlint",
+    "lint": "oxlint --disable-nested-config",
     "typecheck": "tsc --noEmit",
     "check": "./check"
   },

@@ -3,17 +3,12 @@ import { dirname } from 'node:path';
 import { parseNoteTitle, type Note } from '../../domain/note.ts';
 import type { NoteStore } from '../../domain/ports.ts';
 
-/** The stored form. Its field names are the stored format, so rename them only with a migration. */
 interface NoteRecord {
   readonly id: string;
   readonly title: string;
   readonly createdAt: string;
 }
 
-/**
- * Stores notes as JSON in one file. Replace it with a database adapter as the
- * service grows; the domain and the slices do not change.
- */
 export class FileNoteStore implements NoteStore {
   readonly #path: string;
   #queue: Promise<unknown> = Promise.resolve();

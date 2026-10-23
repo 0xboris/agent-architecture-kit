@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # The one command that verifies the project. Agents run it after every step.
-# It prints only failures; full logs go to .check/ .
+# It prints only failures. Full logs go to .check/.
+#
+# Bash reads a script while it runs it, so a step could rewrite the lines after it.
+# All the work sits in main, which bash reads in full before it runs any of it.
 set -uo pipefail
-cd "$(dirname "$0")"
-mkdir -p .check
-status=0
 
 step() {
   local name="$1"; shift
@@ -17,16 +17,30 @@ step() {
   fi
 }
 
-# Install the dependencies when they are missing. Without them every later step fails, so stop here.
-if [ ! -d node_modules ]; then
-  step install npm install --no-audit --no-fund
-  [ "$status" -eq 0 ] || exit 1
-fi
+main() {
+  cd "$(dirname "$0")"
+  mkdir -p .check
+  status=0
 
-step architecture python3 tools/archcheck.py
-step module-map python3 tools/archcheck.py --module-map docs/architecture/modules.md
-step lint npx oxlint
-step typecheck npx tsc --noEmit
-step test node --test --test-reporter=dot "src/**/*.test.ts"
+  # Install the dependencies when they are missing. Without them every later step fails, so stop here.
+  if [ ! -d node_modules ]; then
+    step install npm install --no-audit --no-fund
+    [ "$status" -eq 0 ] || return 1
+  fi
 
-exit $status
+  step architecture python3 tools/archcheck.py
+  step module-map python3 tools/archcheck.py --module-map docs/architecture/modules.md
+  step lint npx oxlint --disable-nested-config
+  step typecheck npx tsc --noEmit
+  step test node --test --test-reporter=dot "src/**/*.test.ts"
+
+  # Each executable file in checks/ is one step. Other files and folders there are helpers.
+  for project_check in checks/*; do
+    [ -f "$project_check" ] && [ -x "$project_check" ] || continue
+    step "$(basename "$project_check")" "./$project_check"
+  done
+
+  return $status
+}
+
+main "$@"; exit

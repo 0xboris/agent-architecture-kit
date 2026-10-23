@@ -1,10 +1,10 @@
 # Stack
 
-The frameworks this project uses, and how the reference slice uses them. `docs/architecture/swift.md` holds the rules that hold for any framework. This file belongs to the project: when the project changes a framework, it updates this file in the same change. Like everything in `docs/architecture/`, it is a gate file, so changes need the owner's review.
+This file names the frameworks this project uses, and shows how the reference slice uses them. `docs/architecture/swift.md` has the rules that apply to any framework. This file belongs to the project, so the change that adds or replaces a framework also updates this file. Like everything in `docs/architecture/`, it is a gate file, and the owner reviews changes to it.
 
 ## UI
 
-- **View models** are `@MainActor @Observable final class`es from Observation that take use cases in their initializer. Their state is one enum, such as loading, loaded, and failed.
+- **View models** are `@MainActor @Observable final class`es from Observation that take use cases in their initializer. Their state is one enum, with cases such as loading, loaded, and failed.
 - **Screens** are SwiftUI views that hold the view model in `@State` and call it from `.task` or actions.
 - A SwiftUI view may read dependencies from `@Environment`; all other types take them through initializers. `@Query`, `@FetchRequest`, and `@AppStorage` read storage directly, so they are not allowed in UI targets.
 - For previews, define small sample data or a private in-memory port implementation inside `#if DEBUG` in the UI target; TestSupport stays test-only.
@@ -16,17 +16,18 @@ The Platform adapter implements `AppLogger` with `os.Logger`. Test support guard
 ## Tests
 
 - Tests use Swift Testing: `import Testing`, `@Test`, and `#expect`. Unwrap with `#require` instead of `!` or `try!`.
-- A stub takes its results in its initializer and records its calls:
+- Run a use case on a `FileNoteStore` in a temporary directory, then read back what it stored:
 
   ```swift
-  let store = StubNoteStore(failure: Offline())
-  // ... run the use case ...
-  #expect(await store.saved.isEmpty)
+  let note = try await CreateNote(store: store, time: FakeTimeSource(), ids: SequentialIDGenerator())(title: "Groceries")
+  #expect(try await store.allNotes() == [note])
   ```
+
+- `FailingNoteStore(failure:)` throws from every call, for the error paths.
 
 ## Storage
 
-`FileNoteStore` in the Persistence target keeps the notes in a JSON file. It stands in for Core Data or SwiftData until the app needs one. It maps between `NoteRecord` and `Note`, and `NoteRecord` never leaves Persistence. `FileNoteStoreTests` runs it against a temporary directory.
+`FileNoteStore` in the Persistence target keeps the notes in a JSON file. It stands in for Core Data or SwiftData until the app needs one. It maps between `NoteRecord` and `Note`, and `NoteRecord` never leaves Persistence. `FileNoteStoreTests` runs it against a temporary directory, and `fileWrittenByVersion1StillLoads` pins the stored format.
 
 ## Commands
 
@@ -35,7 +36,7 @@ The Platform adapter implements `AppLogger` with `os.Logger`. Test support guard
 ## Changing a framework
 
 1. Allow the new framework for the kinds that use it in `architecture.json`, under `external.allow`. Frameworks belong in UI, adapters, and the composition root, never in the domain or use cases. A pure package that does no I/O, such as swift-collections, may go in the domain. Other targets then use only the domain's types and parse functions, and the domain maps the package's errors to its own errors. A major upgrade of the package then changes only the domain.
-2. Rewrite the reference slice and its tests with the new framework, so that agents copy the new patterns. Keep what the slice does unchanged: it exists to show patterns, and new behavior belongs in real slices. Wire details that the new library decides, such as its validation errors, may change; note them here.
+2. Rewrite the reference slice and its tests with the new framework, so that agents copy the new patterns. Keep what the slice does unchanged, because it exists to show patterns, and new behavior belongs in real slices. Wire details that the new framework decides, such as its validation errors, may change. Note them here.
 3. Update the commands in `./check` and the CI workflow.
 4. Add any new compiler, linter, or test runner settings file to `.github/CODEOWNERS` if it does not match a listed pattern yet.
 5. Update this file. List frameworks that the project has chosen but no code uses yet under a heading such as "Chosen, not set up yet", so that the next agent knows they are decided.

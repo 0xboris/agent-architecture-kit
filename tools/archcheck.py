@@ -11,7 +11,8 @@ Usage:
   python3 tools/archcheck.py --write-baseline     accept all current violations
   python3 tools/archcheck.py --module-map FILE    write the module map as Markdown
 
-Exit codes: 0 no new violations, 1 new violations, 2 configuration error.
+Exit codes: 0 no new violations, 1 new violations or a baseline that accepts
+more violations than exist, 2 configuration error.
 Needs Python 3.9 or later and nothing else.
 """
 
@@ -51,11 +52,15 @@ class ConfigError(Exception):
 
 def load_json_with_comments(path):
     with open(path, encoding="utf-8") as f:
-        lines = [line for line in f if not line.lstrip().startswith("//")]
+        return parse_json_with_comments(f.read(), path)
+
+
+def parse_json_with_comments(text, name):
+    lines = [line for line in text.splitlines(keepends=True) if not line.lstrip().startswith("//")]
     try:
         return json.loads("".join(lines))
     except json.JSONDecodeError as error:
-        raise ConfigError(f"{path} is not valid JSON: {error}")
+        raise ConfigError(f"{name} is not valid JSON: {error}")
 
 
 def glob_to_regex(pattern):
@@ -116,7 +121,7 @@ def name_pattern_matches(name, pattern):
 
 
 def strip_source(code, language, keep_strings):
-    """Blank out comments, and string contents unless keep_strings. Keeps line breaks."""
+    """Blanks out comments, and string contents unless keep_strings. Keeps line breaks."""
     out, i, n = [], 0, len(code)
 
     def blank(text):
@@ -259,14 +264,21 @@ class Project:
                     best = module
         return best
 
+    def dev_patterns(self):
+        """Test files and development scripts. The import rules skip them, and production code may not import them."""
+        return self.config.get("testFiles", []) + self.config.get("scriptFiles", [])
+
     def _collect_files(self):
         roots = self.config.get("sourceRoots", ["."])
-        tests = self.config.get("testFiles", [])
+        tests = self.dev_patterns()
         ignore = self.config.get("ignore", [])
         production, test, unmapped = [], [], []
         for root in roots:
             for directory, dirs, files in os.walk(os.path.join(self.root, root)):
-                dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS and not d.startswith("."))
+                # Dot directories are skipped only at the repository root, such as .claude and .scratch.
+                # Production code cannot import them, and a dot directory inside a module is checked.
+                at_root = os.path.normpath(directory) == os.path.normpath(self.root)
+                dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS and not (at_root and d.startswith(".")))
                 for file in sorted(files):
                     if not file.endswith(self.extensions) or file.endswith(".d.ts"):
                         continue
@@ -348,7 +360,8 @@ class Project:
         return None
 
     def resolve(self, rel, target):
-        """Returns ('module', Module) for project imports, ('external', name) otherwise, ('missing', path)."""
+        """('module', Module) for a project import, ('test-file', path) for a test or script, ('missing', path)
+        for a path in no module, and ('external', name) otherwise."""
         if self.language == "swift":
             module = self.by_name.get(target)
             return ("module", module) if module else ("external", target)
@@ -368,7 +381,7 @@ class Project:
                 break
         if target.startswith("."):
             resolved = os.path.normpath(os.path.join(os.path.dirname(rel), target)).replace(os.sep, "/")
-            if matches_any(resolved, self.config.get("testFiles", [])):
+            if matches_any(resolved, self.dev_patterns()):
                 return ("test-file", resolved)
             module = self.module_for_path(resolved)
             return ("module", module) if module else ("missing", resolved)
@@ -544,12 +557,12 @@ def check(project):
                     violations.append(Violation(
                         "unresolved", f"unresolved:{rel}->{value}", rel, line,
                         f"{module.label()} imports '{value}', which belongs to no module in architecture.json.",
-                        "Import code from a mapped module. Configuration and ignored files are not imported by modules."))
+                        "Import code from a mapped module. Modules never import configuration or ignored files."))
                 elif kind_of == "test-file":
                     violations.append(Violation(
                         "test-import", f"test-import:{rel}->{value}", rel, line,
-                        f"{module.label()} imports the test file '{value}'.",
-                        "Production code never imports test code. Move what both need into the module itself."))
+                        f"{module.label()} imports the test or script file '{value}'.",
+                        "Production code never imports tests or development scripts. Move what both need into the module itself."))
                 elif kind_of == "external":
                     if not external_allowed(project, kind_config, value):
                         violations.append(Violation(
@@ -588,7 +601,7 @@ def check(project):
                 if not matches_any(inner, composition.get("allowedFiles", ["**"])):
                     violations.append(Violation(
                         "composition", f"composition-file:{rel}", rel, None,
-                        f"{module.label()} holds wiring only, in the files that architecture.json lists.",
+                        f"{module.label()} allows only the wiring files that architecture.json lists, and '{inner}' is not one of them.",
                         "Put feature code into a slice, in the shape of the reference slice that AGENTS.md names."))
                 if not matches_any(inner, composition.get("controlFlowAllowedIn", [])):
                     allowed_lines = [re.compile(p) for p in composition.get("controlFlowAllowedPatterns", [])]
@@ -715,17 +728,21 @@ def main():
 
     summary = f"{len(project.modules)} modules, {len(project.production_files)} source files"
     if new:
-        print(f"Architecture check: {len(new)} new violations ({summary}).\n")
+        print(f"Architecture check: {len(new)} new violation{'' if len(new) == 1 else 's'} ({summary}).\n")
         for v in new:
             allowed = baseline.get(v.key, 0)
             print(v.render() + (f"\n  The baseline accepts {allowed} of these." if allowed else "") + "\n")
-        print(f"The dependency rule and the module kinds are explained in {DOCS}.")
+        print(f"{DOCS} explains the dependency rule and the module kinds.")
+    elif stale:
+        print(f"Architecture check: no new violations ({summary}), but the baseline is out of date.")
     else:
         print(f"Architecture check passed ({summary}" + (f", {accepted} accepted by the baseline" if accepted else "") + ").")
     if stale:
-        print(f"\nThe baseline accepts more violations than exist for {len(stale)} entries. "
-              "Run `python3 tools/archcheck.py --write-baseline` to lower it.")
-    return 1 if new else 0
+        print(f"\nThe baseline accepts more violations than exist for {len(stale)} "
+              f"entr{'y' if len(stale) == 1 else 'ies'}, "
+              "so a fixed violation could come back unnoticed. "
+              "Run `python3 tools/archcheck.py --write-baseline` to lower it, and commit the baseline.")
+    return 1 if new or stale else 0
 
 
 if __name__ == "__main__":

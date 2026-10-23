@@ -1,5 +1,3 @@
-// Package testsupport holds stubs, small fakes, and sample data. Only test
-// code imports it.
 package testsupport
 
 import (

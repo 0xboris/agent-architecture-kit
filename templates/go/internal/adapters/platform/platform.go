@@ -1,4 +1,3 @@
-// Package platform implements the ports for time, ids, and logging.
 package platform
 
 import (

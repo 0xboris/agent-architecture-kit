@@ -1,6 +1,6 @@
 // The linter's rules. oxlint runs them, and oxlint-tsgolint, which is built on
 // TypeScript 7, gives the type-aware rules their type information. This is a
-// gate file: change it on purpose, with the owner's approval.
+// gate file, so the owner reviews every change to it.
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["eslint", "typescript", "oxc"],
@@ -31,7 +31,7 @@
 
     // Type-aware rules, as in typescript-eslint's recommendedTypeChecked. The no-unsafe
     // rules stop an `any` value, such as the result of JSON.parse, from flowing into a
-    // typed value: parse outside data with a parse function instead.
+    // typed value. Parse outside data with a parse function instead.
     "typescript/await-thenable": "error",
     "typescript/no-array-delete": "error",
     "typescript/no-base-to-string": "error",
@@ -59,12 +59,12 @@
   },
   "overrides": [
     {
-      // A type assertion can create a branded value, such as a NoteTitle, without the
-      // check in its parse function. Only the domain may assert, in that parse function.
-      // Tests and test support may assert too, for example on parsed response JSON.
-      // `as const` is not a type assertion, so it stays allowed everywhere.
-      "files": ["src/**/*.ts"],
-      "excludeFiles": ["src/domain/**", "src/testsupport/**", "**/*.test.ts", "**/*.testing.ts"],
+      // A type assertion can create a branded value, such as a NoteTitle, without its
+      // check. Production code gets a branded value only from a type guard that checks it,
+      // such as isNoteTitle. Tests and test support may assert, for example on parsed
+      // response JSON. `as const` is not a type assertion, so it stays allowed everywhere.
+      "files": ["src/**/*.ts", "scripts/**/*.ts", "checks/**/*.ts"],
+      "excludeFiles": ["src/testsupport/**", "**/*.test.ts", "**/*.testing.ts"],
       "rules": { "typescript/consistent-type-assertions": ["error", { "assertionStyle": "never" }] }
     }
   ]

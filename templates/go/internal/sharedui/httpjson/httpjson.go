@@ -1,5 +1,3 @@
-// Package httpjson holds the JSON helpers that the handlers of every slice
-// share. Shared UI holds no business types.
 package httpjson
 
 import (
@@ -26,7 +24,7 @@ func Error(w http.ResponseWriter, status int, code, message string) {
 	Write(w, status, errorBody{Code: code, Message: message})
 }
 
-// Read decodes a JSON request body. Unknown fields are ignored, so newer
+// Read decodes a JSON request body and ignores unknown fields, so newer
 // clients can send fields that this version does not know yet.
 func Read(r *http.Request, into any) error {
 	return json.NewDecoder(io.LimitReader(r.Body, maxBodyBytes)).Decode(into)

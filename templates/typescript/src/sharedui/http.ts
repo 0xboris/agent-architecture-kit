@@ -1,7 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
-/** HTTP helpers that the routes of every slice share. Shared UI holds no business types. */
-
 export type Handler = (request: IncomingMessage, response: ServerResponse) => Promise<void>;
 
 export interface Route {
@@ -17,8 +15,11 @@ export function sendJson(response: ServerResponse, status: number, body: unknown
   response.end(JSON.stringify(body));
 }
 
-export function sendError(response: ServerResponse, status: number, code: string, message: string): void {
-  sendJson(response, status, { code, message });
+export function sendError(
+  response: ServerResponse,
+  error: { readonly status: number; readonly code: string; readonly message: string },
+): void {
+  sendJson(response, error.status, { code: error.code, message: error.message });
 }
 
 /** Reads a JSON body. Unknown fields stay in the value, so newer clients can send fields this version ignores. */
@@ -51,14 +52,14 @@ export function createRouter(routes: readonly Route[], onError: (error: unknown)
     const path = new URL(request.url ?? '/', 'http://localhost').pathname;
     const route = routes.find((candidate) => candidate.method === request.method && candidate.path === path);
     if (route === undefined) {
-      sendError(response, 404, 'not_found', 'There is nothing at this path.');
+      sendError(response, { status: 404, code: 'not_found', message: 'There is nothing at this path.' });
       return;
     }
     try {
       await route.handle(request, response);
     } catch (error) {
       onError(error);
-      if (!response.headersSent) sendError(response, 500, 'internal_error', 'Something went wrong.');
+      if (!response.headersSent) sendError(response, { status: 500, code: 'internal_error', message: 'Something went wrong.' });
     }
   };
 }

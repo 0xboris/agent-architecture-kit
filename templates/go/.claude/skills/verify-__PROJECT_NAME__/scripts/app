@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+# Starts, checks, drives, and stops a disposable instance of the service, and keeps the evidence.
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage, from the repository root:
+  app start                                       start an instance on an empty data directory, print its run id
+  app doctor <run>                                check that the run's instance is alive and answers
+  app call <run> <name> <METHOD> <path> [body]    send one request, save it as evidence/<name>.txt
+  app stop <run>                                  stop the run's instance and delete its data, keep the evidence
+EOF
+}
+
+root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)
+runs="$root/.verify"
+
+launch() {
+  local dir=$1 port=$2
+  (cd "$root" && go build -o "$dir/server" ./cmd/server)
+  (cd "$root" && ADDR="127.0.0.1:$port" DATA_DIR="$dir/data" exec "$dir/server") > "$dir/server.log" 2>&1 &
+  echo $! > "$dir/pid"
+}
+
+run_dir() {
+  [ -d "$runs/$1" ] || { echo "There is no run $1 in $runs." >&2; exit 2; }
+  echo "$runs/$1"
+}
+
+alive() {
+  [ -f "$1/pid" ] && kill -0 "$(cat "$1/pid")" 2> /dev/null
+}
+
+answers() {
+  [ "$(curl -s -o /dev/null -w '%{http_code}' "$(cat "$1/url")/" || true)" != "000" ]
+}
+
+start() {
+  local run dir port
+  run="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+  dir="$runs/$run"
+  mkdir -p "$dir/data" "$dir/evidence"
+  port=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
+  echo "http://127.0.0.1:$port" > "$dir/url"
+  launch "$dir" "$port"
+  for _ in $(seq 60); do
+    if answers "$dir"; then
+      echo "$run"
+      return 0
+    fi
+    alive "$dir" || break
+    sleep 0.5
+  done
+  echo "The service did not answer at $(cat "$dir/url") within 30 seconds. Its log:" >&2
+  cat "$dir/server.log" >&2
+  stop "$run" > /dev/null
+  return 1
+}
+
+doctor() {
+  local dir
+  dir=$(run_dir "$1")
+  if ! alive "$dir"; then
+    echo "FAIL the process that run $1 started is not running. Start a new run. Its log is $dir/server.log."
+    return 1
+  fi
+  if ! answers "$dir"; then
+    echo "FAIL $(cat "$dir/url") does not answer. Its log is $dir/server.log."
+    return 1
+  fi
+  echo "ok url=$(cat "$dir/url") pid=$(cat "$dir/pid") data=$dir/data evidence=$dir/evidence"
+}
+
+call() {
+  local dir=$1 name=$2 method=$3 path=$4 body=${5-}
+  local args=(-sS -X "$method" -w '\n< status %{http_code}\n')
+  [ -n "$body" ] && args+=(-H 'content-type: application/json' --data "$body")
+  {
+    echo "> $method $path"
+    [ -z "$body" ] || echo "> $body"
+    curl "${args[@]}" "$(cat "$dir/url")$path" | sed '/^$/d'
+  } | tee "$dir/evidence/$name.txt"
+}
+
+stop() {
+  local dir
+  dir=$(run_dir "$1")
+  if alive "$dir"; then
+    kill "$(cat "$dir/pid")"
+    for _ in $(seq 20); do
+      alive "$dir" || break
+      sleep 0.25
+    done
+    ! alive "$dir" || kill -9 "$(cat "$dir/pid")"
+  fi
+  rm -rf "$dir/data" "$dir/server" "$dir/pid"
+  echo "Stopped run $1. The evidence is in $dir/evidence."
+}
+
+case "${1-}" in
+  start) [ $# -eq 1 ] || { usage >&2; exit 2; }; start ;;
+  doctor) [ $# -eq 2 ] || { usage >&2; exit 2; }; doctor "$2" ;;
+  call)
+    [ $# -ge 5 ] && [ $# -le 6 ] || { usage >&2; exit 2; }
+    dir=$(run_dir "$2") || exit 2
+    call "$dir" "$3" "$4" "$5" "${6-}"
+    ;;
+  stop) [ $# -eq 2 ] || { usage >&2; exit 2; }; stop "$2" ;;
+  -h | --help | help) usage ;;
+  *) usage >&2; exit 2 ;;
+esac
